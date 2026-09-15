@@ -1,0 +1,896 @@
+// Prisma Schema for IcchaStore B2B Women's Kurta & Ethnicwear Platform
+// Supports PostgreSQL with full relational integrity, dual-GST billing entities, MOQ engine, and Dynamic WebGL Hero CMS.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================================
+// 1. AUTHENTICATION & CORE USERS
+// =========================================================================
+
+enum UserRole {
+  ADMIN
+  SUPER_ADMIN
+  OPERATIONS_MANAGER
+  RETAILER
+  VENDOR
+}
+
+enum RetailerAccountStatus {
+  APPLICATION_RECEIVED
+  UNDER_REVIEW
+  ADDITIONAL_INFORMATION_REQUIRED
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model VendorProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  businessName       String
+  contactName        String
+  mobile             String
+  gstin              String   @unique
+  pan                String?
+  address            String
+  city               String
+  state              String
+  stateCode          String
+  bankName           String?
+  accountHolder      String?
+  accountNumber      String?
+  ifsc               String?
+  branch             String?
+  upiId              String?
+  invoicePrefix      String   @default("INV-VEN-")
+  defaultGstRate     Decimal  @default(5.0) @db.Decimal(5, 2)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  vendorCode         String   @unique
+
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products           Product[]
+  warehouses         Warehouse[]
+
+  @@index([businessName])
+}
+model Warehouse {
+  id          String   @id @default(uuid())
+  vendorId    String
+  name        String
+  address     String?
+  city        String?
+  state       String?
+  pincode     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor      VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  products    Product[]
+
+  @@index([vendorId])
+}
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  passwordHash  String
+  name          String
+  mobile        String?
+  role          UserRole     @default(RETAILER)
+  isActive      Boolean      @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  sessions      Session[]
+  retailerProfile RetailerProfile?
+  auditLogs     AuditLog[]
+  createdSlides HeroSlide[]  @relation("SlideCreator")
+  updatedSlides HeroSlide[]  @relation("SlideUpdater")
+  vendorProfile   VendorProfile?
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// =========================================================================
+// 2. RETAILER PROFILES & KYC VERIFICATION
+// =========================================================================
+
+model RetailerProfile {
+  id                  String                @id @default(uuid())
+  userId              String                @unique
+  businessName        String
+  applicantName       String
+  mobile              String
+  whatsapp            String?
+  gstin               String?               @unique
+  pan                 String?
+  businessType        String                @default("boutique")
+  yearsInBusiness     Int                   @default(1)
+  annualTurnover      String?
+  status              RetailerAccountStatus @default(APPLICATION_RECEIVED)
+  classificationId    String?
+  
+  // Custom or VIP Overrides
+  moqSetsOverride     Int?
+  moqDesignsOverride  Int?
+
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classification      RetailerClassification? @relation(fields: [classificationId], references: [id])
+  addresses           RetailerAddress[]
+  kycApplications     KYCApplication[]
+  orders              OrderEnquiry[]
+  carts               Cart[]
+  moqOverrides        MOQOverride[]
+  sellerRequests      SellerContactRequest[]
+
+  @@index([businessName])
+  @@index([status])
+  @@index([gstin])
+}
+
+model RetailerAddress {
+  id                 String          @id @default(uuid())
+  retailerProfileId  String
+  type               String          @default("billing") // "billing" | "shipping"
+  street             String
+  area               String?
+  city               String
+  state              String
+  stateCode          String          // e.g. "07", "08", "24"
+  pincode            String
+  landmark           String?
+  isDefault          Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  retailerProfile    RetailerProfile @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([retailerProfileId])
+}
+
+model RetailerClassification {
+  id                 String          @id @default(uuid())
+  code               String          @unique // e.g. "tier_1_distributor", "boutique"
+  name               String
+  creditTermDays     Int             @default(0)
+  defaultDiscountPct Decimal         @default(0.0) @db.Decimal(5, 2)
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  retailers          RetailerProfile[]
+}
+
+model KYCApplication {
+  id                 String                @id @default(uuid())
+  retailerProfileId  String
+  gstin              String?
+  pan                String?
+  businessName       String
+  applicantName      String
+  mobile             String
+  email              String
+  status             RetailerAccountStatus @default(APPLICATION_RECEIVED)
+  rejectionReason    String?
+  infoRequestNotes   String?
+  reviewedByUserId   String?
+  reviewedAt         DateTime?
+  submittedAt        DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  retailerProfile    RetailerProfile       @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
+  documents          KYCDocument[]
+  activities         KYCActivity[]
+
+  @@index([retailerProfileId])
+  @@index([status])
+  @@index([gstin])
+}
+
+model KYCDocument {
+  id                 String          @id @default(uuid())
+  applicationId      String
+  documentType       String          // "gst_certificate" | "pan_card" | "business_proof" | "shop_photo"
+  mediaAssetId       String
+  originalFilename   String
+  fileSize           Int
+  mimeType           String
+  uploadedAt         DateTime        @default(now())
+
+  application        KYCApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  mediaAsset         MediaAsset      @relation(fields: [mediaAssetId], references: [id])
+
+  @@index([applicationId])
+}
+
+model KYCActivity {
+  id                 String          @id @default(uuid())
+  applicationId      String
+  actorUserId        String?
+  actorName          String
+  action             String          // "SUBMITTED" | "UNDER_REVIEW" | "INFO_REQUESTED" | "APPROVED" | "REJECTED"
+  notes              String?
+  createdAt          DateTime        @default(now())
+
+  application        KYCApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+// =========================================================================
+// 3. BILLING ENTITIES & DUAL-GST ARCHITECTURE
+// =========================================================================
+
+model BillingEntity {
+  id                 String          @id @default(uuid())
+  code               String          @unique // "entity_a" (Surat) | "entity_b" (Jaipur)
+  legalName          String
+  tradeName          String
+  gstin              String          @unique
+  pan                String
+  state              String
+  stateCode          String          // "24" for Gujarat, "08" for Rajasthan
+  registeredAddress  String
+  contactEmail       String
+  contactPhone       String
+  bankName           String
+  accountHolder      String
+  accountNumber      String
+  ifsc               String
+  branch             String
+  upiId              String?
+  estimatePrefix     String          // e.g. "EST-SUR-" or "EST-JPR-"
+  invoicePrefix      String          // e.g. "INV-SUR-" or "INV-JPR-"
+  defaultGstRate     Decimal         @default(5.0) @db.Decimal(5, 2)
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  categories         Category[]
+  estimates          Estimate[]
+  gstConfigurations  GSTConfiguration[]
+}
+
+model GSTConfiguration {
+  id                 String          @id @default(uuid())
+  billingEntityId    String
+  hsnCode            String
+  description        String
+  cgstRate           Decimal         @default(2.5) @db.Decimal(5, 2)
+  sgstRate           Decimal         @default(2.5) @db.Decimal(5, 2)
+  igstRate           Decimal         @default(5.0) @db.Decimal(5, 2)
+  effectiveFrom      DateTime        @default(now())
+
+  billingEntity      BillingEntity   @relation(fields: [billingEntityId], references: [id], onDelete: Cascade)
+  products           Product[]
+
+  @@unique([billingEntityId, hsnCode])
+}
+
+// =========================================================================
+// 4. CATALOGUE, COLLECTIONS & WHOLESALE LOTS
+// =========================================================================
+
+model Category {
+  id                 String          @id @default(uuid())
+  slug               String          @unique
+  name               String
+  description        String?
+  type               String          @default("kurti_pant_set") // "kurti_pant_set" | "3_pc_suit" | "kurti_only"
+  billingEntityId    String?
+  mediaAssetId       String?
+  sortOrder          Int             @default(0)
+  isFeatured         Boolean         @default(true)
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  billingEntity      BillingEntity?  @relation(fields: [billingEntityId], references: [id])
+  mediaAsset         MediaAsset?     @relation(fields: [mediaAssetId], references: [id])
+  subcategories      Subcategory[]
+  products           Product[]
+  moqRules           MOQRule[]
+  heroSlides         HeroSlide[]
+
+  @@index([slug])
+  @@index([billingEntityId])
+}
+
+model Subcategory {
+  id                 String          @id @default(uuid())
+  categoryId         String
+  slug               String          @unique
+  name               String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  category           Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products           Product[]
+
+  @@index([categoryId])
+}
+
+model Collection {
+  id                 String          @id @default(uuid())
+  slug               String          @unique
+  name               String
+  description        String?
+  mediaAssetId       String?
+  sortOrder          Int             @default(0)
+  isPublished        Boolean         @default(true)
+  startAt            DateTime?
+  endAt              DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  mediaAsset         MediaAsset?     @relation(fields: [mediaAssetId], references: [id])
+  products           Product[]
+  heroSlides         HeroSlide[]
+
+  @@index([slug])
+}
+
+model Product {
+  id                 String          @id @default(uuid())
+  sku                String          @unique
+  designNumber       String
+  name               String
+  slug               String          @unique
+  description        String?
+  categoryId         String
+  subcategoryId      String?
+  collectionId       String?
+  gstConfigId        String?
+  
+  // Wholesale Lot & Set Architecture
+  wholesalePricePerPiece Decimal     @db.Decimal(10, 2)
+  piecesPerSet       Int             @default(4)
+  wholesalePricePerSet   Decimal     @db.Decimal(10, 2)
+  availableSets      Int             @default(0)
+  totalAvailablePieces   Int         @default(0)
+  
+  sizeCombination    String          // e.g. "M(38), L(40), XL(42), XXL(44)"
+  color              String
+  fabric             String
+  workType           String
+  style              String
+  clothingType       String
+  hsnCode            String          @default("621142")
+  
+  // Garment Measurements & Details
+  kurtiLength        String?
+  bottomLength       String?
+  dupattaLength      String?
+  dupattaFabric      String?
+  liningIncluded     Boolean         @default(false)
+  pocketIncluded     Boolean         @default(true)
+  neckPattern        String?
+  sleeveLength       String?
+  careInstruction    String?
+  
+  isNewArrival       Boolean         @default(false)
+  isFeatured         Boolean         @default(false)
+  isPublicRepresentative Boolean     @default(true) // Visible on public site without price
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  category           Category        @relation(fields: [categoryId], references: [id])
+  subcategory        Subcategory?    @relation(fields: [subcategoryId], references: [id])
+  collection         Collection?     @relation(fields: [collectionId], references: [id])
+  gstConfig          GSTConfiguration? @relation(fields: [gstConfigId], references: [id])
+  
+  media              ProductMedia[]
+  cartItems          CartItem[]
+  orderItems         OrderItem[]
+  stockAdjustments   StockAdjustment[]
+  stockReservations  StockReservation[]
+  moqRules           MOQRule[]
+  heroSlides         HeroSlide[]
+  vendorId           String?
+  vendor             VendorProfile?  @relation(fields: [vendorId], references: [id])
+  warehouseId        String?
+  warehouse           Warehouse?      @relation(fields: [warehouseId], references: [id])
+  @@index([sku])
+  @@index([designNumber])
+  @@index([categoryId])
+  @@index([collectionId])
+  @@index([warehouseId])
+}
+
+model ProductMedia {
+  id                 String          @id @default(uuid())
+  productId          String
+  mediaAssetId       String
+  mediaType          String          @default("MAIN_IMAGE") // "MAIN_IMAGE" | "ALTERNATE_IMAGE" | "DETAIL_IMAGE" | "VIDEO"
+  sortOrder          Int             @default(0)
+  isPrimary          Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaAsset         MediaAsset      @relation(fields: [mediaAssetId], references: [id])
+
+  @@index([productId])
+}
+
+// =========================================================================
+// 5. INVENTORY & STOCK TRANSACTIONS
+// =========================================================================
+
+model StockAdjustment {
+  id                 String          @id @default(uuid())
+  productId          String
+  previousSets       Int
+  adjustmentSets     Int
+  newSets            Int
+  reason             String          // "INITIAL_STOCK" | "PRODUCTION_RECEIPT" | "ORDER_FULFILLMENT" | "DAMAGED" | "MANUAL_CORRECTION"
+  actorUserId        String?
+  createdAt          DateTime        @default(now())
+
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model StockReservation {
+  id                 String          @id @default(uuid())
+  productId          String
+  orderEnquiryId     String
+  reservedSets       Int
+  reservedPieces     Int
+  expiresAt          DateTime?
+  isConfirmed        Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderEnquiry       OrderEnquiry    @relation(fields: [orderEnquiryId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([orderEnquiryId])
+}
+
+// =========================================================================
+// 6. MOQ ENGINE & OVERRIDES
+// =========================================================================
+
+enum MOQScope {
+  GLOBAL
+  CATEGORY
+  PRODUCT
+}
+
+model MOQRule {
+  id                 String          @id @default(uuid())
+  scope              MOQScope        @default(GLOBAL)
+  categoryId         String?
+  productId          String?
+  minSets            Int             @default(4)
+  minDesigns         Int             @default(1)
+  minPieces          Int             @default(16)
+  minOrderValue      Decimal?        @db.Decimal(10, 2)
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  category           Category?       @relation(fields: [categoryId], references: [id])
+  product            Product?        @relation(fields: [productId], references: [id])
+
+  @@index([scope])
+}
+
+model MOQOverride {
+  id                 String          @id @default(uuid())
+  retailerProfileId  String
+  approvedByUserId   String
+  permittedMinSets   Int             @default(2)
+  reason             String
+  expiresAt          DateTime?
+  isUsed             Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+
+  retailerProfile    RetailerProfile @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([retailerProfileId])
+}
+
+model SellerContactRequest {
+  id                 String          @id @default(uuid())
+  retailerProfileId  String
+  customerName       String
+  businessName       String
+  mobile             String
+  whatsapp           String?
+  totalDesigns       Int
+  totalSets          Int
+  totalPieces        Int
+  cartSubtotal       Decimal         @db.Decimal(10, 2)
+  preferredDate      String?
+  preferredTime      String?
+  remarks            String?
+  status             String          @default("requested") // "requested" | "contact_pending" | "scheduled" | "moq_approved" | "declined"
+  assignedToUserId   String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  retailerProfile    RetailerProfile @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([retailerProfileId])
+  @@index([status])
+}
+
+// =========================================================================
+// 7. CARTS & CHECKOUT ORDERS
+// =========================================================================
+
+model Cart {
+  id                 String          @id @default(uuid())
+  retailerProfileId  String          @unique
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  retailerProfile    RetailerProfile @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
+  items              CartItem[]
+}
+
+model CartItem {
+  id                 String          @id @default(uuid())
+  cartId             String
+  productId          String
+  sets               Int             @default(1)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  cart               Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+}
+
+enum OrderEnquiryStatus {
+  ENQUIRY_RECEIVED
+  UNDER_REVIEW
+  SELLER_CONTACTED
+  ESTIMATE_GENERATED
+  CONFIRMED
+  AWAITING_PAYMENT
+  PROCESSING
+  READY_FOR_DISPATCH
+  DISPATCHED
+  COMPLETED
+  CANCELLED
+}
+
+model OrderEnquiry {
+  id                 String             @id @default(uuid())
+  orderNumber        String             @unique // e.g. "IC-ORD-8801"
+  retailerProfileId  String
+  retailerBusinessName String
+  retailerApplicantName String
+  retailerGstin      String?
+  retailerContact    String
+  retailerEmail      String
+  
+  billingAddressJson String             @db.Text
+  shippingAddressJson String            @db.Text
+  
+  totalDesigns       Int
+  totalSets          Int
+  totalPieces        Int
+  subtotal           Decimal            @db.Decimal(12, 2)
+  totalGst           Decimal            @db.Decimal(12, 2)
+  shipping           Decimal            @db.Decimal(10, 2)
+  masterTotal        Decimal            @db.Decimal(12, 2)
+  
+  status             OrderEnquiryStatus @default(ENQUIRY_RECEIVED)
+  customerRemarks    String?            @db.Text
+  internalNotes      String?            @db.Text
+  
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  retailerProfile    RetailerProfile    @relation(fields: [retailerProfileId], references: [id])
+  items              OrderItem[]
+  estimates          Estimate[]
+  stockReservations  StockReservation[]
+  history            OrderStatusHistory[]
+
+  @@index([orderNumber])
+  @@index([retailerProfileId])
+  @@index([status])
+}
+
+model OrderItem {
+  id                 String          @id @default(uuid())
+  orderEnquiryId     String
+  productId          String
+  billingEntityId    String
+  
+  productName        String
+  sku                String
+  designNumber       String
+  categoryName       String
+  sets               Int
+  piecesPerSet       Int
+  totalPieces        Int
+  pieceRate          Decimal         @db.Decimal(10, 2)
+  setRate            Decimal         @db.Decimal(10, 2)
+  lineSubtotal       Decimal         @db.Decimal(12, 2)
+  hsn                String
+  gstRate            Decimal         @db.Decimal(5, 2)
+  gstAmount          Decimal         @db.Decimal(10, 2)
+  totalWithGst       Decimal         @db.Decimal(12, 2)
+  imageUrl           String?
+  color              String
+  sizeCombination    String
+
+  orderEnquiry       OrderEnquiry    @relation(fields: [orderEnquiryId], references: [id], onDelete: Cascade)
+  product            Product         @relation(fields: [productId], references: [id])
+
+  @@index([orderEnquiryId])
+  @@index([productId])
+}
+
+model OrderStatusHistory {
+  id                 String             @id @default(uuid())
+  orderEnquiryId     String
+  status             OrderEnquiryStatus
+  actorUserId        String?
+  actorName          String
+  notes              String?
+  createdAt          DateTime           @default(now())
+
+  orderEnquiry       OrderEnquiry       @relation(fields: [orderEnquiryId], references: [id], onDelete: Cascade)
+
+  @@index([orderEnquiryId])
+}
+
+// =========================================================================
+// 8. DUAL-ENTITY PROFORMA ESTIMATES & SECURE ACCESS
+// =========================================================================
+
+model Estimate {
+  id                 String          @id @default(uuid())
+  estimateNumber     String          @unique // e.g. "EST-SUR-8801A" or "EST-JPR-8801B"
+  orderEnquiryId     String
+  billingEntityId    String
+  
+  date               DateTime        @default(now())
+  validUntil         DateTime
+  totalSets          Int
+  totalPieces        Int
+  taxableSubtotal    Decimal         @db.Decimal(12, 2)
+  isInterState       Boolean         @default(false)
+  cgstAmount         Decimal         @default(0) @db.Decimal(10, 2)
+  sgstAmount         Decimal         @default(0) @db.Decimal(10, 2)
+  igstAmount         Decimal         @default(0) @db.Decimal(10, 2)
+  totalGst           Decimal         @db.Decimal(10, 2)
+  shippingCharge     Decimal         @default(0) @db.Decimal(10, 2)
+  grandTotal         Decimal         @db.Decimal(12, 2)
+  
+  pdfMediaAssetId    String?
+  paymentTermsJson   String?         @db.Text
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  orderEnquiry       OrderEnquiry    @relation(fields: [orderEnquiryId], references: [id], onDelete: Cascade)
+  billingEntity      BillingEntity   @relation(fields: [billingEntityId], references: [id])
+  pdfMediaAsset      MediaAsset?     @relation(fields: [pdfMediaAssetId], references: [id])
+  accessTokens       EstimateAccessToken[]
+
+  @@index([estimateNumber])
+  @@index([orderEnquiryId])
+  @@index([billingEntityId])
+}
+
+model EstimateAccessToken {
+  id                 String          @id @default(uuid())
+  estimateId         String
+  token              String          @unique
+  expiresAt          DateTime
+  createdAt          DateTime        @default(now())
+
+  estimate           Estimate        @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+// =========================================================================
+// 9. DYNAMIC WEBGL HERO CMS & CAMPAIGN MANAGEMENT
+// =========================================================================
+
+enum HeroSlideStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum HeroContentPosition {
+  LEFT
+  RIGHT
+  CENTER
+}
+
+enum HeroTextTheme {
+  LIGHT
+  DARK
+}
+
+model HeroSlide {
+  id                 String              @id @default(uuid())
+  internalName       String              @default("Kurta Campaign")
+  slideNumber        String              @default("01")
+  navLabel           String              @default("New Arrivals")
+  eyebrow            String
+  title              String
+  description        String              @db.Text
+  
+  // Media Assets
+  desktopAssetId     String?
+  mobileAssetId      String?
+  desktopImageUrl    String              // Fallback or derived direct URL
+  mobileImageUrl     String?
+  imageAlt           String
+  
+  // CTAs
+  primaryCtaLabel    String              @default("SHOP NEW ARRIVALS")
+  primaryCtaUrl      String              @default("/collections")
+  secondaryCtaLabel  String?
+  secondaryCtaUrl    String?
+  
+  // Layout & Focal Positioning
+  contentPosition    HeroContentPosition @default(LEFT)
+  textTheme          HeroTextTheme       @default(LIGHT)
+  desktopImagePosition String            @default("center 25%")
+  mobileImagePosition  String            @default("60% 20%")
+  
+  // Relational Links
+  linkedProductId    String?
+  linkedCategoryId   String?
+  linkedCollectionId String?
+  fabricTagsJson     String?             // JSON array e.g. ["Pure Muslin", "Zari Detailing"]
+  editorialBadge     String?             @default("Direct Factory Archive")
+  
+  // Ordering & Scheduling
+  sortOrder          Int                 @default(0)
+  status             HeroSlideStatus     @default(PUBLISHED)
+  startAt            DateTime?
+  endAt              DateTime?
+  
+  // Audit metadata
+  createdById        String?
+  updatedById        String?
+  publishedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  desktopAsset       MediaAsset?         @relation("DesktopHeroImage", fields: [desktopAssetId], references: [id])
+  mobileAsset        MediaAsset?         @relation("MobileHeroImage", fields: [mobileAssetId], references: [id])
+  linkedProduct      Product?            @relation(fields: [linkedProductId], references: [id])
+  linkedCategory     Category?           @relation(fields: [linkedCategoryId], references: [id])
+  linkedCollection   Collection?         @relation(fields: [linkedCollectionId], references: [id])
+  createdBy          User?               @relation("SlideCreator", fields: [createdById], references: [id])
+  updatedBy          User?               @relation("SlideUpdater", fields: [updatedById], references: [id])
+  versions           HeroSlideVersion[]
+
+  @@index([status])
+  @@index([sortOrder])
+  @@index([startAt])
+  @@index([endAt])
+}
+
+model HeroSlideVersion {
+  id                 String          @id @default(uuid())
+  heroSlideId        String
+  payloadJson        String          @db.Text
+  createdById        String?
+  createdAt          DateTime        @default(now())
+
+  heroSlide          HeroSlide       @relation(fields: [heroSlideId], references: [id], onDelete: Cascade)
+
+  @@index([heroSlideId])
+}
+
+// =========================================================================
+// 10. MEDIA ASSETS & STORAGE ABSTRACTION
+// =========================================================================
+
+enum MediaVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model MediaAsset {
+  id                 String          @id @default(uuid())
+  storageProvider    String          @default("LOCAL") // "LOCAL" | "S3" | "R2" | "GCS"
+  bucket             String
+  storageKey         String          @unique
+  publicUrl          String
+  visibility         MediaVisibility @default(PUBLIC)
+  mimeType           String
+  originalFilename   String
+  fileExtension      String
+  sizeBytes          Int
+  width              Int?
+  height             Int?
+  aspectRatio        Decimal?        @db.Decimal(5, 2)
+  altText            String?
+  mediaType          String          @default("HERO_DESKTOP")
+  createdById        String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  heroDesktopSlides  HeroSlide[]     @relation("DesktopHeroImage")
+  heroMobileSlides   HeroSlide[]     @relation("MobileHeroImage")
+  productMedia       ProductMedia[]
+  categoryBanners    Category[]
+  collectionBanners  Collection[]
+  kycDocuments       KYCDocument[]
+  estimatePdfs       Estimate[]
+
+  @@index([storageKey])
+  @@index([visibility])
+  @@index([mediaType])
+}
+
+// =========================================================================
+// 11. AUDIT LOGS & SITE SETTINGS
+// =========================================================================
+
+model AuditLog {
+  id                 String          @id @default(uuid())
+  actorUserId        String?
+  actorEmail         String?
+  actorRole          String?
+  action             String          // e.g. "HERO_SLIDE_PUBLISHED", "KYC_APPROVED", "PRICE_UPDATED", "STOCK_RESERVED"
+  entityType         String          // "HeroSlide" | "RetailerProfile" | "Product" | "OrderEnquiry"
+  entityId           String
+  metadataJson       String?         @db.Text
+  ipAddress          String?
+  createdAt          DateTime        @default(now())
+
+  actorUser          User?           @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SiteSetting {
+  id                 String          @id @default(uuid())
+  key                String          @unique
+  value              String          @db.Text
+  description        String?
+  updatedAt          DateTime        @updatedAt
+
+  @@index([key])
+}

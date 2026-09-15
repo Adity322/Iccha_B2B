@@ -1,0 +1,12 @@
+node_modules/
+.next/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+cookies.txt
+retailer-cookies.txt
+staff_cookies.txt
+vendor_cookies.txt
+.local-storage/

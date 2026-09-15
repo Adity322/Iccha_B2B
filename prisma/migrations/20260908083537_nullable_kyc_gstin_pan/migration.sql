@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "KYCApplication" ALTER COLUMN "gstin" DROP NOT NULL,
+ALTER COLUMN "pan" DROP NOT NULL;

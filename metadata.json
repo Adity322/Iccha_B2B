@@ -1,0 +1,6 @@
+{
+  "name": "IcchaStore - B2B Kurti Wholesale",
+  "description": "B2B wholesale semi-ecommerce platform for stitched 2-piece and 3-piece women's kurtis, sets, KYC onboarding, and order enquiries.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,1088 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import {
+  Plus,
+  Search,
+  Edit3,
+  Trash2,
+  CheckCircle2,
+  Save,
+  Building2,
+  ChevronLeft,
+  Loader2
+} from 'lucide-react';
+import AdminSidebar from '@/components/layout/AdminSidebar';
+import { useApp } from '@/lib/context/AppContext';
+
+interface Vendor {
+  id: string;
+  businessName: string;
+  contactName: string;
+  mobile: string;
+  gstin: string;
+  isActive: boolean;
+  _count: { products: number };
+}
+
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Warehouse {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  isActive: boolean;
+}
+
+interface Product {
+  id: string;
+  sku: string;
+  designNumber: string;
+  name: string;
+  description?: string | null;
+  categoryId: string;
+  category?: { name: string };
+  vendor?: { id: string; businessName: string } | null;
+  warehouse?: {
+    id: string;
+    name: string;
+    city: string | null;
+    state: string | null;
+    isActive: boolean;
+  } | null;
+  wholesalePricePerPiece: string | number;
+  piecesPerSet: number;
+  wholesalePricePerSet: string | number;
+  availableSets: number;
+  sizeCombination: string;
+  color: string;
+  fabric: string;
+  workType: string;
+  style: string;
+  clothingType: string;
+  hsnCode: string;
+  media?: { mediaAsset: { publicUrl: string } }[]
+}
+
+type SortKey = 'newest' | 'oldest' | 'price_high' | 'price_low';
+
+export default function AdminProductsPage() {
+  const { addToast } = useApp();
+
+  // view: 'vendors' = selection screen, 'products' = a vendor's (or house's) product list
+  const [view, setView] = useState<'vendors' | 'products'>('vendors');
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendorsLoading, setVendorsLoading] = useState(true);
+  const [vendorSearch, setVendorSearch] = useState('');
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [currentUserChecked, setCurrentUserChecked] = useState(false);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    sku: '',
+    designNumber: '',
+    categoryId: '',
+    warehouseId: '',
+    wholesalePricePerPiece: 500,
+    piecesPerSet: 1,
+    sizeCombination: 'M, L, XL, XXL',
+    availableSets: 0,
+    fabric: '',
+    workType: '',
+    style: '',
+    clothingType: 'kurti_set',
+    hsnCode: '621142',
+    color: '',
+    description: ''
+  });
+
+  // --- Load vendor list ---
+  const loadVendors = useCallback(async (search: string) => {
+    setVendorsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      const res = await fetch(`/api/admin/vendors?${params.toString()}`);
+      const json = await res.json();
+      if (json.success) {
+        setVendors(json.data);
+      } else {
+        addToast({ type: 'error', title: 'Failed to load vendors', message: json.error });
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Network error', message: 'Could not load vendors.' });
+    } finally {
+      setVendorsLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    if (view === 'vendors' && currentUserRole !== 'VENDOR') {
+      loadVendors(vendorSearch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, currentUserRole]);
+
+  const handleVendorSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loadVendors(vendorSearch);
+  };
+
+  // --- Load categories (once) ---
+  useEffect(() => {
+    fetch('/api/admin/categories')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setCategories(json.data);
+      })
+      .catch(() => {
+        // Category dropdown will just be empty; product creation will fail validation until this exists.
+      });
+  }, []);
+  // --- Load warehouses for vendors ---
+  useEffect(() => {
+    if (currentUserRole !== 'VENDOR') return;
+
+    const loadWarehouses = async () => {
+      try {
+        setWarehousesLoading(true);
+
+        const res = await fetch('/api/vendor/warehouses');
+        const json = await res.json();
+
+        if (json.success) {
+          setWarehouses(json.data);
+        } else {
+          addToast({
+            type: 'error',
+            title: 'Failed to load warehouses',
+            message: json.error || 'Could not load your warehouses.',
+          });
+        }
+      } catch {
+        addToast({
+          type: 'error',
+          title: 'Network error',
+          message: 'Could not load your warehouses.',
+        });
+      } finally {
+        setWarehousesLoading(false);
+      }
+    };
+
+    loadWarehouses();
+  }, [currentUserRole, addToast]);
+  // --- Load products for a selected vendor (or house products if vendor is null) ---
+  const loadProducts = useCallback(async (
+    vendorId: string | null,
+    search: string,
+    cursor?: string,
+    sort: SortKey = 'newest'
+  ) => {
+    if (cursor) setLoadingMore(true); else setProductsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (vendorId) params.set('vendorId', vendorId);
+      if (search) params.set('search', search);
+      if (cursor) params.set('cursor', cursor);
+      params.set('sortBy', sort);
+      const res = await fetch(`/api/admin/products?${params.toString()}`);
+      const json = await res.json();
+      if (json.success) {
+        setProducts(prev => (cursor ? [...prev, ...json.data] : json.data));
+        setNextCursor(json.nextCursor);
+      } else {
+        addToast({ type: 'error', title: 'Failed to load products', message: json.error });
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Network error', message: 'Could not load products.' });
+    } finally {
+      setProductsLoading(false);
+      setLoadingMore(false);
+    }
+  }, [addToast]);
+
+  // Determine who's logged in — a vendor skips the vendor-picker entirely and only ever
+  // sees their own products (the backend already enforces this; this just matches the UI to it).
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) {
+          setCurrentUserRole(json.data.role);
+          if (json.data.role === 'VENDOR') {
+            setView('products');
+            loadProducts(null, '', undefined, 'newest');
+          }
+        }
+      })
+      .finally(() => setCurrentUserChecked(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openVendorProducts = (vendor: Vendor) => {
+    setSelectedVendor(vendor);
+    setProductSearch('');
+    setSortBy('newest'); // reset sort when switching vendors, for predictable behavior
+    setView('products');
+    loadProducts(vendor.id, '', undefined, 'newest');
+  };
+
+  const openHouseProducts = () => {
+    setSelectedVendor(null);
+    setProductSearch('');
+    setSortBy('newest');
+    setView('products');
+    loadProducts(null, '', undefined, 'newest');
+  };
+
+  const handleProductSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loadProducts(selectedVendor?.id ?? null, productSearch, undefined, sortBy);
+  };
+
+  const handleSortChange = (newSort: SortKey) => {
+    setSortBy(newSort);
+    loadProducts(selectedVendor?.id ?? null, productSearch, undefined, newSort); // cursor omitted — fresh page
+  };
+
+  const handleLoadMore = () => {
+    if (nextCursor) {
+      loadProducts(selectedVendor?.id ?? null, productSearch, nextCursor, sortBy);
+    }
+  };
+
+  // --- Create product ---
+  const openAddModal = () => {
+    setEditingProduct(null);
+
+    setFormData({
+      name: '',
+      sku: '',
+      designNumber: `${Math.floor(1000 + Math.random() * 9000)}`,
+      categoryId: categories[0]?.id || '',
+      warehouseId: '',
+      wholesalePricePerPiece: 500,
+      piecesPerSet: 1,
+      sizeCombination: 'M, L, XL, XXL',
+      availableSets: 0,
+      fabric: '',
+      workType: '',
+      style: '',
+      clothingType: 'kurti_set',
+      hsnCode: '621142',
+      color: '',
+      description: ''
+    });
+    setImageFiles([]);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (Number(formData.availableSets) < 5) {
+      addToast({
+        type: 'error',
+        title: 'Minimum stock is 5 sets',
+        message: 'Please enter at least 5 sets in stock.'
+      });
+      return;
+    }
+
+    if (!editingProduct && imageFiles.length < 2) {
+      addToast({
+        type: 'error',
+        title: 'More photos needed',
+        message: 'Please add at least 2 product images.'
+      });
+      return;
+    }
+
+    const mediaAssetIds: string[] = [];
+
+    if (imageFiles.length > 0) {
+      setUploading(true);
+    }
+
+    try {
+      for (const file of imageFiles) {
+        const uploadForm = new FormData();
+        uploadForm.append('file', file);
+        uploadForm.append('mediaType', 'PRODUCT_IMAGE');
+        const uploadRes = await fetch('/api/admin/media/upload', {
+          method: 'POST',
+          body: uploadForm,
+        });
+        const uploadJson = await uploadRes.json();
+        if (uploadJson.success) {
+          mediaAssetIds.push(uploadJson.data.id);
+        } else {
+          addToast({ type: 'error', title: 'Image upload failed', message: uploadJson.error?.message || 'Try again.' });
+          setUploading(false);
+          return;
+        }
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Network error', message: 'Could not upload images.' });
+      setUploading(false);
+      return;
+    }
+    setUploading(false);
+
+    const payload: Record<string, unknown> = {
+      sku: formData.sku,
+      name: formData.name,
+      designNumber: formData.designNumber,
+      slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      categoryId: formData.categoryId,
+      warehouseId: formData.warehouseId,
+      wholesalePricePerPiece: Number(formData.wholesalePricePerPiece),
+      piecesPerSet: Number(formData.piecesPerSet),
+      wholesalePricePerSet: Number(formData.wholesalePricePerPiece) * Number(formData.piecesPerSet),
+      availableSets: Number(formData.availableSets),
+      sizeCombination: formData.sizeCombination,
+      color: formData.color,
+      fabric: formData.fabric,
+      workType: formData.workType,
+      style: formData.style,
+      clothingType: formData.clothingType,
+      hsnCode: formData.hsnCode,
+      description: formData.description
+    };
+
+    if (mediaAssetIds.length > 0) {
+      payload.mediaAssetIds = mediaAssetIds;
+    }
+
+    if (selectedVendor) {
+      payload.vendorId = selectedVendor.id;
+    }
+
+    try {
+      const isEditing = Boolean(editingProduct);
+
+      if (isEditing && editingProduct) {
+        payload.productId = editingProduct.id;
+      }
+
+      const res = await fetch('/api/admin/products', {
+        method: isEditing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        addToast({
+          type: 'success',
+          title: isEditing ? 'Product Updated' : 'Product Added',
+          message: isEditing
+            ? `${formData.name} updated successfully.`
+            : `${formData.name} created.`
+        });
+
+        setIsModalOpen(false);
+        setEditingProduct(null);
+        loadProducts(selectedVendor?.id ?? null, productSearch, undefined, sortBy);
+      } else {
+        addToast({
+          type: 'error',
+          title: isEditing ? 'Failed to update product' : 'Failed to create product',
+          message: json.error
+        });
+      }
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Network error',
+        message: editingProduct
+          ? 'Could not update product.'
+          : 'Could not create product.'
+      });
+    }
+  };
+
+  const openEditModal = (product: Product) => {
+    setEditingProduct(product);
+
+    setFormData({
+      name: product.name || '',
+      sku: product.sku || '',
+      designNumber: product.designNumber || '',
+      categoryId: product.categoryId || '',
+      warehouseId: product.warehouse?.id || '',
+      wholesalePricePerPiece: Number(product.wholesalePricePerPiece) || 0,
+      piecesPerSet: Math.max(1, Number(product.piecesPerSet) || 1),
+      sizeCombination: product.sizeCombination || '',
+      availableSets: Math.max(5, Number(product.availableSets) || 5),
+      fabric: product.fabric || '',
+      workType: product.workType || '',
+      style: product.style || '',
+      clothingType: product.clothingType || 'kurti_set',
+      hsnCode: product.hsnCode || '621142',
+      color: product.color || '',
+      description: product.description || ''
+    });
+
+    setImageFiles([]);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteProduct = async (product: Product) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/admin/products?id=${encodeURIComponent(product.id)}`, {
+        method: 'DELETE',
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        addToast({
+          type: 'success',
+          title: 'Product Deleted',
+          message: `${product.name} has been deleted.`,
+        });
+
+        loadProducts(
+          selectedVendor?.id ?? null,
+          productSearch,
+          undefined,
+          sortBy
+        );
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Could not delete product',
+          message: json.error || 'Please try again.',
+        });
+      }
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Network error',
+        message: 'Could not delete product.',
+      });
+    }
+  };
+
+  // ============================================================
+  // VENDOR SELECTION SCREEN
+  // ============================================================
+  if (!currentUserChecked) {
+    return (
+      <div className="flex min-h-screen bg-[#faf8f5]">
+        <AdminSidebar activeTab="products" />
+        <main className="flex-1 p-6 lg:p-10 flex items-center justify-center">
+          <div className="text-xs text-stone-500">Loading...</div>
+        </main>
+      </div>
+    );
+  }
+  if (view === 'vendors') {
+    return (
+      <div className="flex min-h-screen bg-[#faf8f5]">
+        <AdminSidebar activeTab="products" />
+        <main className="flex-1 p-6 lg:p-10 space-y-6 overflow-y-auto">
+          <div className="border-b border-stone-200 pb-6">
+            <span className="text-xs uppercase font-bold tracking-widest text-[#831843]">
+              Product Catalogue
+            </span>
+            <h1 className="font-serif text-3xl font-bold text-stone-900 mt-1">
+              Select a Vendor
+            </h1>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Choose a vendor to view and manage only their products, or manage IcchaStore&apos;s own listings.
+            </p>
+          </div>
+
+          <form onSubmit={handleVendorSearchSubmit} className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex items-center gap-3 text-xs">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={vendorSearch}
+                onChange={e => setVendorSearch(e.target.value)}
+                placeholder="Search vendors by name, contact, or GSTIN..."
+                className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-900"
+              />
+            </div>
+            <button type="submit" className="px-4 py-2 bg-stone-800 text-white rounded-xl font-bold">
+              Search
+            </button>
+          </form>
+
+          <button
+            type="button"
+            onClick={openHouseProducts}
+            className="w-full text-left bg-white rounded-2xl p-4 border-2 border-dashed border-stone-300 hover:border-rose-900 transition flex items-center gap-3"
+          >
+            <Building2 className="w-5 h-5 text-stone-500" />
+            <div>
+              <div className="font-bold text-stone-900 text-sm">IcchaStore Own Products</div>
+              <div className="text-xs text-stone-500">Products not assigned to any vendor</div>
+            </div>
+          </button>
+
+          {vendorsLoading ? (
+            <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
+              Loading vendors...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {vendors.map(v => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => openVendorProducts(v)}
+                  className="text-left bg-white rounded-2xl p-4 border border-stone-200 hover:border-rose-900 hover:shadow-md transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <strong className="font-serif text-base text-stone-900">{v.businessName}</strong>
+                    {v.isActive && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                  </div>
+                  <div className="text-xs text-stone-500 mt-1">{v.contactName} &bull; {v.mobile}</div>
+                  <div className="text-[10px] font-mono text-stone-400 mt-1">{v.gstin}</div>
+                  <div className="mt-2 text-xs font-bold text-rose-900">
+                    {v._count.products} product{v._count.products === 1 ? '' : 's'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // PRODUCT LIST SCREEN (for selected vendor, or house products)
+  // ============================================================
+  return (
+    <div className="flex min-h-screen bg-[#faf8f5]">
+      <AdminSidebar activeTab="products" />
+
+      <main className="flex-1 p-6 lg:p-10 space-y-6 overflow-y-auto">
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-6">
+          <div>
+            {currentUserRole !== 'VENDOR' && (
+              <button
+                type="button"
+                onClick={() => setView('vendors')}
+                className="text-xs text-stone-500 hover:text-rose-900 flex items-center gap-1 mb-2 font-semibold"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Back to Vendors
+              </button>
+            )}
+            <span className="text-xs uppercase font-bold tracking-widest text-[#831843]">
+              {currentUserRole === 'VENDOR' ? 'My Products' : 'Product Catalogue'}
+            </span>
+            <h1 className="font-serif text-3xl font-bold text-stone-900 mt-1">
+              {currentUserRole === 'VENDOR'
+                ? 'My Product Catalogue'
+                : selectedVendor
+                  ? selectedVendor.businessName
+                  : 'IcchaStore Own Products'}
+            </h1>
+          </div>
+
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="px-4 py-2.5 bg-[#831843] hover:bg-rose-900 text-white rounded-xl font-bold text-xs shadow transition flex items-center gap-2 self-start sm:self-center"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Product</span>
+          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <form onSubmit={handleProductSearchSubmit} className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex items-center gap-3 text-xs flex-1">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+                placeholder={`Search within ${selectedVendor ? selectedVendor.businessName : 'these'} products only...`}
+                className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-900"
+              />
+            </div>
+            <button type="submit" className="px-4 py-2 bg-stone-800 text-white rounded-xl font-bold">
+              Search
+            </button>
+          </form>
+
+          <select
+            value={sortBy}
+            onChange={e => handleSortChange(e.target.value as SortKey)}
+            className="px-3 py-2.5 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-700 shadow-sm focus:outline-none focus:border-rose-900 self-start sm:self-auto"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="price_high">Price: High to Low</option>
+            <option value="price_low">Price: Low to High</option>
+          </select>
+        </div>
+
+        {productsLoading ? (
+          <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
+            Loading products...
+          </div>
+        ) : (
+          <>
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden text-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 font-bold uppercase text-[10px] tracking-wider">
+                      <th className="p-4">Product / Design</th>
+                      <th className="p-4">SKU / Design #</th>
+                      <th className="p-4">Category</th>
+                      <th className="p-4">Warehouse</th>
+                      <th className="p-4">Piece / Set Rate</th>
+                      <th className="p-4">Stock (Sets)</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 text-stone-700 font-medium">
+                    {products.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-stone-400">
+                          No products found.
+                        </td>
+                      </tr>
+                    )}
+                    {products.map((p) => (
+                      <tr key={p.id} className="hover:bg-stone-50/80 transition">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="relative w-12 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200">
+                              {p.media?.[0]?.mediaAsset?.publicUrl && (
+                                <Image
+                                  src={p.media[0].mediaAsset.publicUrl}
+                                  alt={p.name}
+                                  fill
+                                  className="object-cover object-top"
+                                  referrerPolicy="no-referrer"
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <strong className="text-stone-900 block font-serif text-sm">{p.name}</strong>
+                              <span className="text-[11px] text-stone-500">{p.fabric}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="font-mono font-bold text-stone-900">{p.sku}</span>
+                          <span className="text-[10px] text-stone-400 block">#{p.designNumber}</span>
+                        </td>
+                        <td className="p-4">
+                          {p.category?.name || '—'}
+                        </td>
+
+                        <td className="p-4">
+                          {p.warehouse ? (
+                            <>
+                              <span className="font-bold text-stone-900 block">
+                                {p.warehouse.name}
+                              </span>
+
+                              {p.warehouse.city && (
+                                <span className="text-[10px] text-stone-500">
+                                  {p.warehouse.city}
+                                  {p.warehouse.state
+                                    ? `, ${p.warehouse.state}`
+                                    : ''}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-stone-400">—</span>
+                          )}
+                        </td>
+
+                        <td className="p-4">
+                          <div className="font-bold text-stone-900">
+                            ₹{p.wholesalePricePerPiece} <span className="text-[10px] text-stone-400 font-normal">/pc</span>
+                          </div>
+                          <span className="font-mono text-rose-900 text-[11px]">
+                            ₹{Number(p.wholesalePricePerSet).toLocaleString('en-IN')} /set ({p.piecesPerSet} pcs)
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${p.availableSets <= 8 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                            }`}>
+                            {p.availableSets} Sets
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => openEditModal(p)} className="p-2 hover:bg-stone-100 text-stone-700 rounded-lg transition">
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => handleDeleteProduct(p)} className="p-2 hover:bg-rose-50 text-rose-700 rounded-lg transition">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {nextCursor && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="px-6 py-2.5 bg-white border border-stone-300 rounded-xl font-bold text-xs hover:border-rose-900 transition inline-flex items-center gap-2"
+                >
+                  {loadingMore && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {loadingMore ? 'Loading...' : 'Load More'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          {/*
+            Rounded corners live on this OUTER wrapper (rounded-3xl + overflow-hidden),
+            while scrolling happens on the INNER wrapper below — keeps the scrollbar
+            track from clipping into the rounded corner / overlapping the content.
+          */}
+          <div className="bg-white rounded-3xl max-w-2xl w-full border border-stone-200 shadow-2xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 sm:p-8 pr-4 sm:pr-6 space-y-5 text-xs max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                <h2 className="font-serif text-xl font-bold text-stone-900">
+                    {editingProduct
+                      ? `Edit Product${currentUserRole === 'VENDOR' ? '' : selectedVendor ? ` for ${selectedVendor.businessName}` : ''}`
+                      : `Add New Product ${currentUserRole === 'VENDOR' ? '' : selectedVendor ? `for ${selectedVendor.businessName}` : '(IcchaStore Own)'}`}
+                  </h2>
+                <button type="button" onClick={() => {
+                     setIsModalOpen(false);
+                     setEditingProduct(null);
+                   }} className="text-stone-400 font-bold text-sm">
+                  &times; Close
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveProduct} className="space-y-4">
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">Design Title *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">Product Photos {editingProduct ? '(optional while editing)' : '* (minimum 2)'}</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    onChange={e => {
+                      const newFiles = Array.from(e.target.files || []);
+                      setImageFiles(prev => [...prev, ...newFiles]);
+                      e.target.value = ''; // allow re-selecting the same file again if removed later
+                    }}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-[11px]"
+                  />
+                  <p className={`text-[10px] mt-1 ${
+                      !editingProduct && imageFiles.length < 2
+                        ? 'text-amber-700'
+                        : 'text-emerald-700'
+                    }`}>
+                      {imageFiles.length} new photo{imageFiles.length === 1 ? '' : 's'} selected
+                      {!editingProduct && imageFiles.length < 2 && ' — at least 2 required'}
+                      {editingProduct && ' — existing photos will be preserved'}
+                    </p>
+                  {imageFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {imageFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 bg-stone-100 border border-stone-300 rounded-lg px-2 py-1">
+                          <span className="text-[10px] text-stone-700 truncate max-w-[100px]">{file.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setImageFiles(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-stone-400 hover:text-rose-700 font-bold text-xs leading-none"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {currentUserRole === 'VENDOR' && (
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">
+                      Warehouse *
+                    </label>
+
+                    <select
+                      required
+                      value={formData.warehouseId}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          warehouseId: e.target.value,
+                        })
+                      }
+                      disabled={warehousesLoading}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 disabled:opacity-60"
+                    >
+                      <option value="">
+                        {warehousesLoading
+                          ? 'Loading warehouses...'
+                          : 'Select a warehouse...'}
+                      </option>
+
+                      {warehouses
+                        .filter(warehouse => warehouse.isActive)
+                        .map(warehouse => (
+                          <option key={warehouse.id} value={warehouse.id}>
+                            {warehouse.name}
+                            {warehouse.city ? ` — ${warehouse.city}` : ''}
+                          </option>
+                        ))}
+                    </select>
+
+                    {!warehousesLoading &&
+                      warehouses.filter(warehouse => warehouse.isActive).length === 0 && (
+                        <p className="text-[10px] text-amber-700 mt-1">
+                          You have not added a warehouse yet. Please add a warehouse before
+                          creating a product.
+                        </p>
+                      )}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">SKU Code *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.sku}
+                      onChange={e => setFormData({ ...formData, sku: e.target.value })}
+                      placeholder="e.g. ICK-0001"
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Design Number *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.designNumber}
+                      onChange={e => setFormData({ ...formData, designNumber: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">Category *</label>
+                  <select
+                    required
+                    value={formData.categoryId}
+                    onChange={e => setFormData({ ...formData, categoryId: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                  >
+                    <option value="">Select a category...</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {categories.length === 0 && (
+                    <p className="text-[10px] text-amber-700 mt-1">
+                      No categories loaded — the categories API may not exist yet.
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Piece Rate (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={formData.wholesalePricePerPiece}
+                      onChange={e => setFormData({ ...formData, wholesalePricePerPiece: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Pieces per Set *</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={formData.piecesPerSet}
+                      onChange={e => setFormData({ ...formData, piecesPerSet: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Stock (Sets) *</label>
+                    <input
+                      type="number"
+                      required
+                      min={5}
+                      value={formData.availableSets}
+                      onChange={e => setFormData({
+                        ...formData,
+                        availableSets: Number(e.target.value)
+                      })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                    />
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      Minimum 5 sets required.
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-stone-400 -mt-2">
+                  e.g. 1 = just a shirt, 2 = shirt + pant, 3 = kurti + pant + dupatta.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Fabric *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.fabric}
+                      onChange={e => setFormData({ ...formData, fabric: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Work / Embroidery *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.workType}
+                      onChange={e => setFormData({ ...formData, workType: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Style *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.style}
+                      onChange={e => setFormData({ ...formData, style: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-800 mb-1">Color *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.color}
+                      onChange={e => setFormData({ ...formData, color: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">Size Combination *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.sizeCombination}
+                    onChange={e => setFormData({ ...formData, sizeCombination: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">Description</label>
+                  <textarea
+                    rows={2}
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-stone-100">
+                  <button
+                    type="submit"
+                    disabled={uploading}
+                    className="flex-1 py-3 bg-[#831843] hover:bg-rose-900 text-white rounded-xl font-bold shadow flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>
+                      {uploading
+                        ? 'Uploading image...'
+                        : editingProduct
+                          ? 'Save Product Changes'
+                          : 'Save & Publish to Catalogue'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-5 py-3 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
