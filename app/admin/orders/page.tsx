@@ -1,277 +1,253 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, Suspense } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { 
-  Receipt, 
-  Search, 
-  CheckCircle2, 
-  Clock, 
-  Truck, 
-  Building2, 
-  Printer, 
-  Eye, 
-  Sliders, 
+import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import {
   ArrowRight,
-  Sparkles
-} from 'lucide-react';
-import AdminSidebar from '@/components/layout/AdminSidebar';
-import EstimateViewModal from '@/components/order/EstimateViewModal';
-import { OrderService } from '@/lib/services';
-import { OrderEnquiry, EstimateDocument, OrderStatus } from '@/lib/types';
-import { useApp } from '@/lib/context/AppContext';
+  Building2,
+  Clock3,
+  Package,
+  Search,
+  ShoppingBag,
+  Store,
+} from "lucide-react";
+import AdminSidebar from "@/components/layout/AdminSidebar";
+import { useApp } from "@/lib/context/AppContext";
 
-function AdminOrdersContent() {
-  const searchParams = useSearchParams();
-  const orderIdParam = searchParams.get('orderId');
+type Vendor = {
+  id: string;
+  businessName: string;
+  contactName?: string;
+};
+
+type Item = {
+  id: string;
+  designNumber: string;
+  sets: number;
+};
+
+type Order = {
+  id: string;
+  orderNumber: string;
+  retailerBusinessName: string;
+  retailerApplicantName: string;
+  status: string;
+  totalDesigns: number;
+  totalSets: number;
+  totalPieces: number;
+  masterTotal: number;
+  createdAt: string;
+  items: Item[];
+};
+
+const statusClass: Record<string, string> = {
+  ENQUIRY_RECEIVED: "bg-amber-50 text-amber-700 border-amber-200",
+  UNDER_REVIEW: "bg-blue-50 text-blue-700 border-blue-200",
+  SELLER_CONTACTED: "bg-violet-50 text-violet-700 border-violet-200",
+  ESTIMATE_GENERATED: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  CONFIRMED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  AWAITING_PAYMENT: "bg-orange-50 text-orange-700 border-orange-200",
+  PROCESSING: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  READY_FOR_DISPATCH: "bg-teal-50 text-teal-700 border-teal-200",
+  DISPATCHED: "bg-green-50 text-green-700 border-green-200",
+  COMPLETED: "bg-stone-100 text-stone-700 border-stone-200",
+  CANCELLED: "bg-red-50 text-red-700 border-red-200",
+};
+
+function money(v: number) {
+  return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function label(v: string) {
+  return v.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+export default function AdminOrdersPage() {
   const { addToast } = useApp();
-
-  const [orders, setOrders] = useState<OrderEnquiry[]>([]);
+  const [role, setRole] = useState<string | null>(null);
+  const [loadingRole, setLoadingRole] = useState(true);
+  const [view, setView] = useState<"mine" | "vendor">("mine");
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedEstimate, setSelectedEstimate] = useState<EstimateDocument | null>(null);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const loadOrders = useCallback(async (mode: "mine" | "vendor", vendorId?: string) => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams();
+      p.set("view", mode);
+      if (mode === "vendor" && vendorId) p.set("vendorId", vendorId);
+      if (search.trim()) p.set("search", search.trim());
+
+      const res = await fetch(`/api/admin/order-enquiries?${p.toString()}`);
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Could not load orders.");
+      setOrders(json.data || []);
+    } catch (e) {
+      addToast({
+        type: "error",
+        title: "Failed to load orders",
+        message: e instanceof Error ? e.message : "Could not load orders.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast, search]);
 
   useEffect(() => {
-    let isMounted = true;
-    const runFetch = async () => {
-      const data = await OrderService.getOrders();
-      if (isMounted) {
-        setOrders(data);
-        setLoading(false);
-      }
-    };
-    runFetch();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    fetch("/api/auth/me")
+      .then(r => r.json())
+      .then(json => {
+        if (!json.success) return;
+        const r = json.data.role;
+        setRole(r);
+        loadOrders("mine");
+      })
+      .catch(() => addToast({
+        type: "error",
+        title: "Authentication error",
+        message: "Could not determine the current user.",
+      }))
+      .finally(() => setLoadingRole(false));
+  }, [addToast, loadOrders]);
 
-  const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
-    const updated = await OrderService.updateOrderStatus(orderId, newStatus);
-    if (updated) {
+  async function loadVendors() {
+    setVendorLoading(true);
+    try {
+      const res = await fetch("/api/admin/vendors");
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Could not load vendors.");
+      setVendors(json.data || []);
+    } catch (e) {
       addToast({
-        type: 'success',
-        title: `Order Status: ${newStatus.replace('_', ' ').toUpperCase()}`,
-        message: `Order #${updated.orderNumber} lifecycle updated.`
+        type: "error",
+        title: "Failed to load vendors",
+        message: e instanceof Error ? e.message : "Could not load vendors.",
       });
-      const freshOrders = await OrderService.getOrders();
-      setOrders(freshOrders);
+    } finally {
+      setVendorLoading(false);
     }
-  };
+  }
 
-  const filteredOrders = orders.filter(o => {
-    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        o.orderNumber.toLowerCase().includes(q) ||
-        (o.retailerBusinessName || '').toLowerCase().includes(q) ||
-        (o.retailerContact || '').includes(q)
-      );
-    }
-    return true;
-  });
+  function selectVendor(vendor: Vendor) {
+    setSelectedVendor(vendor);
+    setView("vendor");
+    loadOrders("vendor", vendor.id);
+  }
+
+  function openMine() {
+    setSelectedVendor(null);
+    setView("mine");
+    loadOrders("mine");
+  }
+
+  if (loadingRole) {
+    return <div className="flex min-h-screen bg-[#faf8f5]"><AdminSidebar activeTab="orders" /><main className="flex-1 flex items-center justify-center text-xs text-stone-500">Loading...</main></div>;
+  }
 
   return (
     <div className="flex min-h-screen bg-[#faf8f5]">
       <AdminSidebar activeTab="orders" />
-
       <main className="flex-1 p-6 lg:p-10 space-y-6 overflow-y-auto">
-        
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-6">
-          <div>
-            <span className="text-xs uppercase font-bold tracking-widest text-[#831843]">
-              B2B Order Merchandising
-            </span>
-            <h1 className="font-serif text-3xl font-bold text-stone-900 mt-1">
-              Master Order Enquiries Management
-            </h1>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Review multi-entity proforma allocations, log RTGS advance receipts, and manage dispatch logistics.
-            </p>
-          </div>
+        <div className="border-b border-stone-200 pb-6">
+          <span className="text-xs uppercase font-bold tracking-widest text-[#831843]">Order Management</span>
+          <h1 className="font-serif text-3xl font-bold text-stone-900 mt-1">
+            {role === "VENDOR" ? "My Order Enquiries" : view === "vendor" && selectedVendor ? `${selectedVendor.businessName} Orders` : "My Orders"}
+          </h1>
+          <p className="text-xs text-stone-500 mt-1">
+            {role === "VENDOR" ? "Only enquiries containing your products are visible." : "Use the two sections below to separate IcchaStore orders from vendor orders."}
+          </p>
         </div>
 
-        {/* Search & Status Filters */}
-        <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by Order #, Retailer Name, Phone..."
-              className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-900"
-            />
-          </div>
+        {role !== "VENDOR" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button onClick={openMine} className={`text-left rounded-3xl border p-5 ${view === "mine" ? "bg-[#831843] text-white border-[#831843]" : "bg-white border-stone-200"}`}>
+              <Store className="w-5 h-5 mb-3" />
+              <div className="text-xs uppercase tracking-widest font-bold opacity-70">Section 01</div>
+              <h2 className="font-serif text-xl font-bold mt-1">My Orders</h2>
+              <p className="text-xs opacity-70 mt-1">IcchaStore-owned product orders</p>
+            </button>
 
-          <div className="flex flex-wrap gap-1.5">
-            {['all', 'enquiry_received', 'proforma_generated', 'payment_confirmed', 'in_production', 'dispatched'].map(st => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition ${
-                  statusFilter === st
-                    ? 'bg-[#831843] text-white shadow'
-                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                }`}
-              >
-                {st.replace('_', ' ').toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Orders List */}
-        {loading ? (
-          <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
-            Loading order records...
-          </div>
-        ) : filteredOrders.length > 0 ? (
-          <div className="space-y-5">
-            {filteredOrders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm hover:shadow-md transition space-y-6 text-xs"
-              >
-                {/* Order Top Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-4">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-serif text-xl font-bold text-stone-900">
-                        Order #{order.orderNumber}
-                      </h3>
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
-                        order.status === 'dispatched' || order.status === 'completed' ? 'bg-emerald-100 text-emerald-900' :
-                        order.status === 'confirmed' ? 'bg-purple-100 text-purple-900' :
-                        order.status === 'estimate_generated' ? 'bg-sky-100 text-sky-900' :
-                        'bg-amber-100 text-amber-900'
-                      }`}>
-                        {order.status.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="text-stone-600 mt-1">
-                      Retailer: <strong className="text-stone-900 text-sm">{order.retailerBusinessName}</strong> &bull; Contact: {order.retailerContact} &bull; Placed: {order.createdAt}
-                    </div>
-                  </div>
-
-                  <div className="text-left sm:text-right">
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Master Total</span>
-                    <span className="text-xl font-bold font-mono text-[#831843]">
-                      ₹{(order.masterTotal || 0).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Split Entities Badges */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(order.estimates || []).map(est => {
-                    const isSurat = est.billingEntity?.id === 'entity_a';
-
-                    return (
-                      <div
-                        key={est.id}
-                        className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
-                          isSurat ? 'bg-rose-50/60 border-rose-200' : 'bg-amber-50/60 border-amber-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2.5 rounded-xl text-white ${isSurat ? 'bg-[#831843]' : 'bg-[#9a3412]'}`}>
-                            <Building2 className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <strong className="text-stone-900 block text-sm">
-                              {est.billingEntity?.tradeName || (isSurat ? 'Surat Division' : 'Jaipur Unit')}
-                            </strong>
-                            <span className="text-stone-600 font-mono text-[11px]">
-                              {est.totalSets} Sets ({est.items.length} Lots) &bull; ₹{(est.grandTotal || 0).toLocaleString('en-IN')}
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setSelectedEstimate(est)}
-                          className="px-3 py-1.5 bg-white hover:bg-stone-100 text-stone-800 rounded-lg font-bold text-[11px] border border-stone-200 shadow-sm transition flex items-center gap-1"
-                        >
-                          <Printer className="w-3.5 h-3.5 text-stone-600" />
-                          <span>Proforma</span>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Transporter / Notes */}
-                <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200 text-stone-600">
-                  <strong>Transport & Instructions:</strong> {order.customerRemarks || 'Road transport express delivery'}
-                </div>
-
-                {/* Status Action Controls */}
-                <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-stone-500 font-medium">Update Lifecycle State:</span>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(order.id, 'estimate_generated')}
-                      className="px-3 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-900 rounded-lg font-bold transition"
-                    >
-                      Proforma Ready
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(order.id, 'confirmed')}
-                      className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold transition"
-                    >
-                      Confirm RTGS Advance
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(order.id, 'processing')}
-                      className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 rounded-lg font-bold transition"
-                    >
-                      Packing / Finishing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(order.id, 'dispatched')}
-                      className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold shadow transition flex items-center gap-1"
-                    >
-                      <Truck className="w-3.5 h-3.5" />
-                      <span>Dispatch Consignment</span>
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
-            No order enquiries found.
+            <button onClick={() => { setView("vendor"); setSelectedVendor(null); setOrders([]); loadVendors(); }} className={`text-left rounded-3xl border p-5 ${view === "vendor" ? "bg-[#831843] text-white border-[#831843]" : "bg-white border-stone-200"}`}>
+              <Building2 className="w-5 h-5 mb-3" />
+              <div className="text-xs uppercase tracking-widest font-bold opacity-70">Section 02</div>
+              <h2 className="font-serif text-xl font-bold mt-1">Vendor Orders</h2>
+              <p className="text-xs opacity-70 mt-1">Select one vendor at a time</p>
+            </button>
           </div>
         )}
 
+        {role !== "VENDOR" && view === "vendor" && (
+          <section className="bg-white rounded-3xl border border-stone-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-serif text-lg font-bold text-stone-900">Select Vendor</h2>
+                <p className="text-xs text-stone-500">Only the selected vendor&apos;s orders are loaded.</p>
+              </div>
+              {vendorLoading && <span className="text-xs text-stone-500">Loading...</span>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {vendors.map(v => (
+                <button key={v.id} onClick={() => selectVendor(v)} className={`text-left p-4 rounded-2xl border ${selectedVendor?.id === v.id ? "border-[#831843] bg-rose-50" : "border-stone-200 bg-stone-50 hover:bg-white"}`}>
+                  <p className="font-bold text-sm text-stone-900">{v.businessName}</p>
+                  <p className="text-[11px] text-stone-500 mt-1">{v.contactName || "Vendor"}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <form onSubmit={e => { e.preventDefault(); loadOrders(view, selectedVendor?.id); }} className="bg-white rounded-2xl p-4 border border-stone-200 flex items-center gap-3">
+          <Search className="w-4 h-4 text-stone-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search order number or retailer..." className="flex-1 bg-transparent text-xs outline-none" />
+          <button className="px-4 py-2 bg-stone-800 text-white rounded-xl text-xs font-bold">Search</button>
+        </form>
+
+        {view === "vendor" && role !== "VENDOR" && !selectedVendor ? (
+          <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center">
+            <Building2 className="w-8 h-8 mx-auto text-stone-300" />
+            <h3 className="font-serif text-xl font-bold mt-3">Select a vendor</h3>
+          </div>
+        ) : loading ? (
+          <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center text-xs text-stone-500">Loading order enquiries...</div>
+        ) : orders.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center">
+            <Package className="w-8 h-8 mx-auto text-stone-300" />
+            <h3 className="font-serif text-xl font-bold mt-3">No order enquiries</h3>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {orders.map(order => (
+              <Link key={order.id} href={`/admin/orders/${order.id}`} className="block bg-white rounded-3xl border border-stone-200 shadow-sm hover:shadow-md transition">
+                <div className="p-5">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-stone-900">{order.orderNumber}</span>
+                        <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${statusClass[order.status] || "bg-stone-50 text-stone-600 border-stone-200"}`}>{label(order.status)}</span>
+                      </div>
+                      <p className="text-sm font-semibold text-stone-800 mt-2">{order.retailerBusinessName}</p>
+                      <div className="flex items-center gap-1.5 text-[11px] text-stone-500 mt-1"><Clock3 className="w-3.5 h-3.5" />{new Date(order.createdAt).toLocaleString("en-IN")}</div>
+                    </div>
+                    <div className="flex items-center gap-7">
+                      <div><p className="text-[10px] text-stone-400 uppercase">Sets</p><p className="font-bold">{order.totalSets}</p></div>
+                      <div><p className="text-[10px] text-stone-400 uppercase">Products</p><p className="font-bold">{order.items.length}</p></div>
+                      <div className="text-right"><p className="text-[10px] text-stone-400 uppercase">Value</p><p className="font-bold text-[#831843]">{money(order.masterTotal)}</p></div>
+                      <ArrowRight className="w-5 h-5 text-stone-300" />
+                    </div>
+                  </div>
+                  <div className="mt-5 pt-4 border-t border-stone-100 flex flex-wrap gap-2">
+                    {order.items.slice(0, 5).map(i => <span key={i.id} className="px-2.5 py-1.5 rounded-lg bg-stone-50 border border-stone-100 text-[10px] text-stone-600">{i.designNumber} · {i.sets} sets</span>)}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
-
-      <EstimateViewModal
-        estimate={selectedEstimate}
-        onClose={() => setSelectedEstimate(null)}
-      />
-
     </div>
-  );
-}
-
-export default function AdminOrdersPage() {
-  return (
-    <Suspense fallback={<div className="p-12 text-center text-xs text-stone-500">Loading Orders...</div>}>
-      <AdminOrdersContent />
-    </Suspense>
   );
 }

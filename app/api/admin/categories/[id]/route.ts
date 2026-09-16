@@ -9,6 +9,7 @@ const updateCategorySchema = z.object({
   description: z.string().optional(),
   isActive: z.boolean().optional(),
   mediaAssetId: z.string().optional(),
+  requiresSize: z.boolean().optional(),
 });
 
 export async function PATCH(

@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRetailer } from "@/lib/auth/guard";
+import { getOrCreateCart, serializeCartFull } from "@/lib/cart-utils";
+
+const NO_SIZE = "__NO_SIZE__";
 
 const updateSchema = z.object({
   sets: z.number().int().min(1, "Must have at least 1 set — use DELETE to remove the item"),
+  selectedSize: z.string().trim().optional(),
 });
 
 export async function PATCH(
@@ -28,6 +32,7 @@ export async function PATCH(
   }
 
   const { sets } = parsed.data;
+  const selectedSize = parsed.data.selectedSize?.trim() || NO_SIZE;
 
   const cart = await prisma.cart.findUnique({
     where: { retailerProfileId: guard.retailerProfile.id },
@@ -37,18 +42,22 @@ export async function PATCH(
     return NextResponse.json({ success: false, error: "Cart is empty" }, { status: 404 });
   }
 
-  const item = await prisma.cartItem.findUnique({
-    where: { cartId_productId: { cartId: cart.id, productId } },
-    include: { product: true },
+  const item = await prisma.cartItem.findFirst({
+    where: { cartId: cart.id, productId, selectedSize },
+    include: { product: { include: { category: { select: { requiresSize: true } }, sizes: true } } },
   });
 
   if (!item) {
     return NextResponse.json({ success: false, error: "Item not found in your cart" }, { status: 404 });
   }
 
-  if (sets > item.product.availableSets) {
+  const maxSets = item.product.category.requiresSize
+    ? item.product.sizes.find((row) => row.size.toLowerCase() === selectedSize.toLowerCase())?.availableSets ?? 0
+    : item.product.availableSets;
+
+  if (sets > maxSets) {
     return NextResponse.json(
-      { success: false, error: `Only ${item.product.availableSets} set(s) available` },
+      { success: false, error: item.product.category.requiresSize ? `Only ${maxSets} set(s) available in size ${selectedSize}` : `Only ${maxSets} set(s) available` },
       { status: 409 }
     );
   }
@@ -58,7 +67,9 @@ export async function PATCH(
     data: { sets },
   });
 
-  return NextResponse.json({ success: true, data: { productId, sets } });
+  const updatedCart = await getOrCreateCart(guard.retailerProfile.id);
+  const data = await serializeCartFull(updatedCart, guard.retailerProfile.id);
+  return NextResponse.json({ success: true, data });
 }
 
 export async function DELETE(
@@ -71,6 +82,8 @@ export async function DELETE(
   }
 
   const { productId } = await params;
+  const { searchParams } = new URL(request.url);
+  const selectedSize = searchParams.get("selectedSize")?.trim() || NO_SIZE;
 
   const cart = await prisma.cart.findUnique({
     where: { retailerProfileId: guard.retailerProfile.id },
@@ -80,8 +93,8 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: "Cart is empty" }, { status: 404 });
   }
 
-  const item = await prisma.cartItem.findUnique({
-    where: { cartId_productId: { cartId: cart.id, productId } },
+  const item = await prisma.cartItem.findFirst({
+    where: { cartId: cart.id, productId, selectedSize },
   });
 
   if (!item) {
@@ -90,5 +103,7 @@ export async function DELETE(
 
   await prisma.cartItem.delete({ where: { id: item.id } });
 
-  return NextResponse.json({ success: true, data: { productId, removed: true } });
+  const updatedCart = await getOrCreateCart(guard.retailerProfile.id);
+  const data = await serializeCartFull(updatedCart, guard.retailerProfile.id);
+  return NextResponse.json({ success: true, data });
 }

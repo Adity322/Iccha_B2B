@@ -18,6 +18,7 @@ interface Category {
   name: string;
   slug: string;
   description?: string | null;
+  requiresSize: boolean;
   mediaAsset?: { publicUrl: string } | null;
   _count?: { products: number };
 }
@@ -34,7 +35,8 @@ export default function AdminCategoriesPage() {
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
-    description: ''
+    description: '',
+    requiresSize: false
   });
 
   const loadCategories = async () => {
@@ -61,13 +63,13 @@ export default function AdminCategoriesPage() {
 
   const openAddModal = () => {
     setEditingCategory(null);
-    setFormData({ name: '', slug: '', description: '' });
+    setFormData({ name: '', slug: '', description: '', requiresSize: false });
     setIsModalOpen(true);
   };
 
   const openEditModal = (c: Category) => {
     setEditingCategory(c);
-    setFormData({ name: c.name, slug: c.slug, description: c.description || '' });
+    setFormData({ name: c.name, slug: c.slug, description: c.description || '', requiresSize: c.requiresSize });
     setIsModalOpen(true);
   };
 
@@ -106,7 +108,8 @@ export default function AdminCategoriesPage() {
     const payload: Record<string, unknown> = {
       name: formData.name,
       slug,
-      description: formData.description
+      description: formData.description,
+      requiresSize: formData.requiresSize
     };
     if (mediaAssetId) {
       payload.mediaAssetId = mediaAssetId;
@@ -246,6 +249,9 @@ export default function AdminCategoriesPage() {
                     <div className="absolute top-2 right-2 bg-stone-900/80 text-white font-mono text-[10px] px-2 py-0.5 rounded font-bold">
                       {cat._count?.products ?? 0} Products
                     </div>
+                    <div className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded font-bold ${cat.requiresSize ? 'bg-amber-500 text-stone-900' : 'bg-stone-700/80 text-white'}`}>
+                      {cat.requiresSize ? 'SIZE REQUIRED' : 'NO SIZE'}
+                    </div>
                   </div>
 
                   <div className="p-4 space-y-1">
@@ -321,6 +327,19 @@ export default function AdminCategoriesPage() {
                   accept="image/jpeg,image/png,image/webp,image/avif"
                   onChange={e => setImageFile(e.target.files?.[0] || null)}
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-[11px]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 p-3 bg-stone-50 border border-stone-200 rounded-xl">
+                <div>
+                  <p className="font-bold text-stone-800">Size Required for Products</p>
+                  <p className="text-[10px] text-stone-500 mt-0.5">Vendors must enter available sizes and stock quantities for products in this category.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.requiresSize}
+                  onChange={e => setFormData({ ...formData, requiresSize: e.target.checked })}
+                  className="w-4 h-4 accent-rose-900"
                 />
               </div>
 

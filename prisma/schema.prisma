@@ -310,6 +310,7 @@ model Category {
   mediaAssetId       String?
   sortOrder          Int             @default(0)
   isFeatured         Boolean         @default(true)
+  requiresSize       Boolean         @default(false)
   isActive           Boolean         @default(true)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
@@ -378,7 +379,7 @@ model Product {
   availableSets      Int             @default(0)
   totalAvailablePieces   Int         @default(0)
   
-  sizeCombination    String          // e.g. "M(38), L(40), XL(42), XXL(44)"
+  sizeCombination    String          // Legacy/display fallback; size inventory is stored in ProductSize.
   color              String
   fabric             String
   workType           String
@@ -410,6 +411,7 @@ model Product {
   gstConfig          GSTConfiguration? @relation(fields: [gstConfigId], references: [id])
   
   media              ProductMedia[]
+  sizes              ProductSize[]
   cartItems          CartItem[]
   orderItems         OrderItem[]
   stockAdjustments   StockAdjustment[]
@@ -425,6 +427,21 @@ model Product {
   @@index([categoryId])
   @@index([collectionId])
   @@index([warehouseId])
+}
+
+model ProductSize {
+  id           String   @id @default(uuid())
+  productId    String
+  size         String
+  availableSets Int      @default(0)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, size])
+  @@index([productId])
 }
 
 model ProductMedia {
@@ -566,13 +583,14 @@ model CartItem {
   cartId             String
   productId          String
   sets               Int             @default(1)
+  selectedSize       String          @default("__NO_SIZE__")
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
   cart               Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
   product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([cartId, productId])
+  @@unique([cartId, productId, selectedSize])
 }
 
 enum OrderEnquiryStatus {

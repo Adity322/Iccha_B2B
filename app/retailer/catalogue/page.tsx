@@ -139,7 +139,7 @@ export default function RetailerCataloguePage() {
       <RetailerHeader />
 
       <main className="flex-1 py-8 bg-[#faf8f5]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -252,8 +252,8 @@ export default function RetailerCataloguePage() {
 
             </aside>
 
-            <div className="md:col-span-9 space-y-4">
-              <div className="flex items-center justify-between text-xs text-stone-500">
+            <div className="md:col-span-9 space-y-3">
+              <div className="flex items-center justify-between text-[11px] text-stone-500 gap-4">
                 <span>Showing <strong>{products.length}</strong> wholesale kurti designs</span>
                 <span>Standard Lot Ratio: M (38), L (40), XL (42), XXL (44)</span>
               </div>
@@ -264,7 +264,7 @@ export default function RetailerCataloguePage() {
                 </div>
               ) : products.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {products.map((product) => (
                       <RetailerProductCard
                         key={product.id}

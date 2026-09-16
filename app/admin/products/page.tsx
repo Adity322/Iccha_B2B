@@ -29,6 +29,7 @@ interface Vendor {
 interface Category {
   id: string;
   name: string;
+  requiresSize: boolean;
 }
 
 interface Warehouse {
@@ -39,6 +40,17 @@ interface Warehouse {
   state: string | null;
   pincode: string | null;
   isActive: boolean;
+}
+
+interface BillingEntity {
+  id: string;
+  code: string;
+  legalName: string;
+  tradeName: string | null;
+  gstin: string;
+  state: string;
+  stateCode: string;
+  defaultGstRate: string | number;
 }
 
 interface Product {
@@ -57,6 +69,22 @@ interface Product {
     state: string | null;
     isActive: boolean;
   } | null;
+  gstConfig?: {
+    id: string;
+    hsnCode: string;
+    cgstRate: string | number;
+    sgstRate: string | number;
+    igstRate: string | number;
+    billingEntity: {
+      id: string;
+      code: string;
+      legalName: string;
+      tradeName: string | null;
+      state: string;
+      stateCode: string;
+      gstin: string;
+    };
+  } | null;
   wholesalePricePerPiece: string | number;
   piecesPerSet: number;
   wholesalePricePerSet: string | number;
@@ -69,6 +97,7 @@ interface Product {
   clothingType: string;
   hsnCode: string;
   media?: { mediaAsset: { publicUrl: string } }[]
+  productSizes?: { id: string; size: string; availableSets: number; sortOrder: number }[]
 }
 
 type SortKey = 'newest' | 'oldest' | 'price_high' | 'price_low';
@@ -99,12 +128,16 @@ export default function AdminProductsPage() {
   const [currentUserChecked, setCurrentUserChecked] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const [billingEntitiesLoading, setBillingEntitiesLoading] = useState(false);
+  const [sizeStocks, setSizeStocks] = useState<{ size: string; availableSets: number }[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
     designNumber: '',
     categoryId: '',
     warehouseId: '',
+    billingEntityId: '',
     wholesalePricePerPiece: 500,
     piecesPerSet: 1,
     sizeCombination: 'M, L, XL, XXL',
@@ -161,6 +194,38 @@ export default function AdminProductsPage() {
         // Category dropdown will just be empty; product creation will fail validation until this exists.
       });
   }, []);
+
+  // --- Load active billing entities (required for every product) ---
+  useEffect(() => {
+    const loadBillingEntities = async () => {
+      try {
+        setBillingEntitiesLoading(true);
+        const res = await fetch('/api/admin/billing-entities');
+        const json = await res.json();
+
+        if (json.success) {
+          setBillingEntities(json.data);
+        } else {
+          addToast({
+            type: 'error',
+            title: 'Failed to load billing entities',
+            message: json.error || 'Could not load billing entities.',
+          });
+        }
+      } catch {
+        addToast({
+          type: 'error',
+          title: 'Network error',
+          message: 'Could not load billing entities.',
+        });
+      } finally {
+        setBillingEntitiesLoading(false);
+      }
+    };
+
+    loadBillingEntities();
+  }, [addToast]);
+
   // --- Load warehouses for vendors ---
   useEffect(() => {
     if (currentUserRole !== 'VENDOR') return;
@@ -284,9 +349,10 @@ export default function AdminProductsPage() {
       designNumber: `${Math.floor(1000 + Math.random() * 9000)}`,
       categoryId: categories[0]?.id || '',
       warehouseId: '',
+      billingEntityId: billingEntities[0]?.id || '',
       wholesalePricePerPiece: 500,
       piecesPerSet: 1,
-      sizeCombination: 'M, L, XL, XXL',
+      sizeCombination: '',
       availableSets: 0,
       fabric: '',
       workType: '',
@@ -296,6 +362,7 @@ export default function AdminProductsPage() {
       color: '',
       description: ''
     });
+    setSizeStocks([]);
     setImageFiles([]);
     setIsModalOpen(true);
   };
@@ -303,12 +370,27 @@ export default function AdminProductsPage() {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (Number(formData.availableSets) < 5) {
-      addToast({
-        type: 'error',
-        title: 'Minimum stock is 5 sets',
-        message: 'Please enter at least 5 sets in stock.'
-      });
+    const selectedCategory = categories.find(c => c.id === formData.categoryId);
+    const requiresSize = Boolean(selectedCategory?.requiresSize);
+    const totalSizeSets = sizeStocks.reduce((sum, item) => sum + Number(item.availableSets || 0), 0);
+
+    if (requiresSize) {
+      const validSizeStocks = sizeStocks.filter(item => item.size.trim() && Number(item.availableSets) >= 0);
+      const duplicateSizes = validSizeStocks.map(item => item.size.trim().toUpperCase()).filter((size, index, arr) => arr.indexOf(size) !== index);
+      if (validSizeStocks.length === 0) {
+        addToast({ type: 'error', title: 'Sizes required', message: 'Add at least one size and its available stock.' });
+        return;
+      }
+      if (duplicateSizes.length > 0) {
+        addToast({ type: 'error', title: 'Duplicate size', message: 'Each size can be entered only once.' });
+        return;
+      }
+      if (totalSizeSets < 5) {
+        addToast({ type: 'error', title: 'Minimum stock is 5 sets', message: 'The combined stock across all sizes must be at least 5 sets.' });
+        return;
+      }
+    } else if (Number(formData.availableSets) < 5) {
+      addToast({ type: 'error', title: 'Minimum stock is 5 sets', message: 'Please enter at least 5 sets in stock.' });
       return;
     }
 
@@ -359,11 +441,13 @@ export default function AdminProductsPage() {
       slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       categoryId: formData.categoryId,
       warehouseId: formData.warehouseId,
+      billingEntityId: formData.billingEntityId,
       wholesalePricePerPiece: Number(formData.wholesalePricePerPiece),
       piecesPerSet: Number(formData.piecesPerSet),
       wholesalePricePerSet: Number(formData.wholesalePricePerPiece) * Number(formData.piecesPerSet),
-      availableSets: Number(formData.availableSets),
-      sizeCombination: formData.sizeCombination,
+      availableSets: requiresSize ? totalSizeSets : Number(formData.availableSets),
+      sizeCombination: requiresSize ? sizeStocks.map(s => s.size.trim()).filter(Boolean).join(', ') : '',
+      sizeStocks: requiresSize ? sizeStocks.map(s => ({ size: s.size.trim(), availableSets: Number(s.availableSets) })) : [],
       color: formData.color,
       fabric: formData.fabric,
       workType: formData.workType,
@@ -435,6 +519,7 @@ export default function AdminProductsPage() {
       designNumber: product.designNumber || '',
       categoryId: product.categoryId || '',
       warehouseId: product.warehouse?.id || '',
+      billingEntityId: product.gstConfig?.billingEntity?.id || '',
       wholesalePricePerPiece: Number(product.wholesalePricePerPiece) || 0,
       piecesPerSet: Math.max(1, Number(product.piecesPerSet) || 1),
       sizeCombination: product.sizeCombination || '',
@@ -448,6 +533,9 @@ export default function AdminProductsPage() {
       description: product.description || ''
     });
 
+    setSizeStocks(
+      (product.productSizes || []).map(s => ({ size: s.size, availableSets: s.availableSets }))
+    );
     setImageFiles([]);
     setIsModalOpen(true);
   };
@@ -928,7 +1016,12 @@ export default function AdminProductsPage() {
                   <select
                     required
                     value={formData.categoryId}
-                    onChange={e => setFormData({ ...formData, categoryId: e.target.value })}
+                    onChange={e => {
+                      const categoryId = e.target.value;
+                      const category = categories.find(c => c.id === categoryId);
+                      setFormData({ ...formData, categoryId, sizeCombination: category?.requiresSize ? formData.sizeCombination : '' });
+                      setSizeStocks([]);
+                    }}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
                   >
                     <option value="">Select a category...</option>
@@ -939,6 +1032,53 @@ export default function AdminProductsPage() {
                   {categories.length === 0 && (
                     <p className="text-[10px] text-amber-700 mt-1">
                       No categories loaded — the categories API may not exist yet.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">
+                    Billing Entity *
+                  </label>
+                  <select
+                    required
+                    value={formData.billingEntityId}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        billingEntityId: e.target.value,
+                      })
+                    }
+                    disabled={billingEntitiesLoading}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 disabled:opacity-60"
+                  >
+                    <option value="">
+                      {billingEntitiesLoading
+                        ? 'Loading billing entities...'
+                        : 'Select a billing entity...'}
+                    </option>
+
+                    {billingEntities
+                      .filter(entity => entity.id)
+                      .map(entity => (
+                        <option key={entity.id} value={entity.id}>
+                          {entity.code.toUpperCase()} — {entity.tradeName || entity.legalName}
+                          {' — '}GSTIN: {entity.gstin} ({entity.state})
+                        </option>
+                      ))}
+                  </select>
+
+                  {!billingEntitiesLoading && billingEntities.length === 0 && (
+                    <p className="text-[10px] text-amber-700 mt-1">
+                      No active billing entities are configured. Product creation will not be
+                      possible until one is available.
+                    </p>
+                  )}
+
+                  {formData.billingEntityId && (
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      GST configuration for this product will be resolved using this billing
+                      entity and the HSN code.
                     </p>
                   )}
                 </div>
@@ -1033,16 +1173,32 @@ export default function AdminProductsPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-stone-800 mb-1">Size Combination *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.sizeCombination}
-                    onChange={e => setFormData({ ...formData, sizeCombination: e.target.value })}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
-                  />
-                </div>
+                {categories.find(c => c.id === formData.categoryId)?.requiresSize ? (
+                  <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                    <div>
+                      <label className="block font-bold text-stone-800 mb-1">Available Sizes & Stock *</label>
+                      <p className="text-[10px] text-stone-500">Enter each size and the number of wholesale sets available in that size.</p>
+                    </div>
+                    {sizeStocks.map((row, index) => (
+                      <div key={`${index}-${row.size}`} className="grid grid-cols-[1fr_120px_auto] gap-2 items-end">
+                        <div>
+                          <label className="block text-[10px] font-bold text-stone-600 mb-1">Size</label>
+                          <input value={row.size} onChange={e => setSizeStocks(prev => prev.map((item, i) => i === index ? { ...item, size: e.target.value } : item))} placeholder="M" className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-stone-600 mb-1">Sets</label>
+                          <input type="number" min={0} value={row.availableSets} onChange={e => setSizeStocks(prev => prev.map((item, i) => i === index ? { ...item, availableSets: Number(e.target.value) } : item))} className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl font-mono" />
+                        </div>
+                        <button type="button" onClick={() => setSizeStocks(prev => prev.filter((_, i) => i !== index))} className="px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl border border-stone-200">Remove</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setSizeStocks(prev => [...prev, { size: '', availableSets: 0 }])} className="px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-800">+ Add Size</button>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-stone-50 border border-stone-200 p-3 text-[10px] text-stone-500">
+                    This category does not require size selection. No size inventory will be shown to retailers.
+                  </div>
+                )}
 
                 <div>
                   <label className="block font-bold text-stone-800 mb-1">Description</label>

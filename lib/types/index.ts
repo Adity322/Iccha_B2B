@@ -1,25 +1,30 @@
 export type UserRole = 'public' | 'retailer' | 'admin';
 
-export type RetailerStatus = 
-  | 'pending_kyc' 
-  | 'under_review' 
-  | 'info_required' 
-  | 'approved' 
-  | 'rejected' 
+export type RetailerStatus =
+  | 'pending_kyc'
+  | 'under_review'
+  | 'info_required'
+  | 'approved'
+  | 'rejected'
   | 'suspended';
 
 export type KYCStatus = RetailerStatus;
 
-export type RetailerClassification = 
-  | 'Tier 1 - Platinum' 
-  | 'Tier 2 - Gold' 
-  | 'Standard Wholesale' 
+export type RetailerClassification =
+  | 'Tier 1 - Platinum'
+  | 'Tier 2 - Gold'
+  | 'Standard Wholesale'
   | 'New Partner';
 
 export interface KYCDocument {
   id: string;
   name: string;
-  type: 'gst_certificate' | 'pan_card' | 'shop_proof' | 'visiting_card' | 'trade_license';
+  type:
+  | 'gst_certificate'
+  | 'pan_card'
+  | 'shop_proof'
+  | 'visiting_card'
+  | 'trade_license';
   url: string;
   size: string;
   uploadedAt: string;
@@ -42,7 +47,12 @@ export interface KYCApplication {
   retailerId: string;
   businessName: string;
   applicantName: string;
-  businessType: 'Wholesale Retailer' | 'Boutique Owner' | 'Chain Store' | 'Reseller / Distributor' | 'Export House';
+  businessType:
+  | 'Wholesale Retailer'
+  | 'Boutique Owner'
+  | 'Chain Store'
+  | 'Reseller / Distributor'
+  | 'Export House';
   mobile: string;
   whatsapp: string;
   email: string;
@@ -83,7 +93,7 @@ export interface Retailer {
 }
 
 export interface BillingEntity {
-  id: 'entity_a' | 'entity_b';
+  id: string;
   code: string;
   legalName: string;
   tradeName: string;
@@ -119,7 +129,7 @@ export interface Category {
   slug: string;
   description: string;
   image: string;
-  billingEntityId: 'entity_a' | 'entity_b';
+  billingEntityId?: string;
   subcategories: string[];
   itemCount: number;
   representativeTagline: string;
@@ -160,10 +170,31 @@ export interface Product {
   sizes: string[];
   colors: string[];
   collectionName: string;
-  billingEntityId: 'entity_a' | 'entity_b';
+  billingEntityId?: string;
+  billingEntityCode?: string | null;
+
+  vendor?: {
+    id: string;
+    businessName: string;
+  } | null;
+
+  warehouse?: {
+    id: string;
+    name: string;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    isActive: boolean;
+  } | null;
   hsn: string; // e.g., '621142'
   gstRate: number; // e.g., 5
-  status: 'available' | 'low_stock' | 'out_of_stock' | 'reserved' | 'archived';
+  status:
+  | 'available'
+  | 'low_stock'
+  | 'out_of_stock'
+  | 'reserved'
+  | 'archived';
   isNewArrival: boolean;
   isFeatured: boolean;
   media: ProductMedia[];
@@ -190,11 +221,11 @@ export interface CartItem {
   unitPrice: number;
   setPrice: number;
   lineSubtotal: number;
-  billingEntityId: 'entity_a' | 'entity_b';
+  billingEntityId?: string;
 }
 
 export interface EntityCartSummary {
-  entityId: 'entity_a' | 'entity_b';
+  entityId: string;
   entity: BillingEntity;
   items: CartItem[];
   totalSets: number;
@@ -239,8 +270,14 @@ export interface MOQRuleConfig {
   sampleOrderMaxSets: number;
   entitySpecificMOQ: boolean;
   entityRules?: {
-    entity_a?: { entityId: 'entity_a'; minimumSets: number };
-    entity_b?: { entityId: 'entity_b'; minimumSets: number };
+    entity_a?: {
+      entityId: 'entity_a';
+      minimumSets: number;
+    };
+    entity_b?: {
+      entityId: 'entity_b';
+      minimumSets: number;
+    };
   };
 }
 
@@ -279,7 +316,7 @@ export interface OrderItem {
   sku: string;
   designNumber: string;
   categoryName: string;
-  billingEntityId: 'entity_a' | 'entity_b';
+  billingEntityId: string;
   sets: number;
   piecesPerSet: number;
   totalPieces: number;
@@ -356,7 +393,7 @@ export interface OrderEnquiry {
   masterTotal: number;
   status: OrderStatus;
   timeline: OrderTimelineEvent[];
-  entityIds: ('entity_a' | 'entity_b')[];
+  entityIds: string[];
   estimates: EstimateDocument[];
   customerRemarks?: string;
   adminNotes?: string;
@@ -388,7 +425,13 @@ export interface SellerContactRequest {
   preferredDate: string;
   preferredTime: string;
   remarks: string;
-  status: 'requested' | 'contact_pending' | 'scheduled' | 'completed' | 'moq_exception_approved' | 'declined';
+  status:
+  | 'requested'
+  | 'contact_pending'
+  | 'scheduled'
+  | 'completed'
+  | 'moq_exception_approved'
+  | 'declined';
   adminNotes?: string;
   scheduledAt?: string;
   createdAt: string;

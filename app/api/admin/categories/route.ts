@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         name: true,
         slug: true,
         description: true,
+        requiresSize: true,
         mediaAsset: { select: { publicUrl: true } },
         _count: { select: { products: true } },
       },
@@ -48,6 +49,7 @@ const createCategorySchema = z.object({
   description: z.string().optional(),
   type: z.string().default("kurti_pant_set"),
   mediaAssetId: z.string().optional(),
+  requiresSize: z.boolean().default(false),
 });
 
 export async function POST(request: NextRequest) {

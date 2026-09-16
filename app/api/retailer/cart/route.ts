@@ -2,85 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRetailer } from "@/lib/auth/guard";
-
-async function getOrCreateCart(retailerProfileId: string) {
-  let cart = await prisma.cart.findUnique({
-    where: { retailerProfileId },
-    include: {
-      items: {
-        include: {
-          product: {
-            include: {
-              media: {
-                where: { isPrimary: true },
-                take: 1,
-                include: { mediaAsset: { select: { publicUrl: true } } },
-              },
-              vendor: { select: { businessName: true } },
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
-
-  if (!cart) {
-    cart = await prisma.cart.create({
-      data: { retailerProfileId },
-      include: {
-        items: {
-          include: {
-            product: {
-              include: {
-                media: {
-                where: { isPrimary: true },
-                take: 1,
-                include: { mediaAsset: { select: { publicUrl: true } } },
-              },
-                vendor: { select: { businessName: true } },
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  return cart;
-}
-
-function serializeCart(cart: Awaited<ReturnType<typeof getOrCreateCart>>) {
-  return {
-    id: cart.id,
-    items: cart.items.map((item) => ({
-      id: item.id,
-      productId: item.productId,
-      sets: item.sets,
-      product: {
-        name: item.product.name,
-        sku: item.product.sku,
-        designNumber: item.product.designNumber,
-        color: item.product.color,
-        sizeCombination: item.product.sizeCombination,
-        piecesPerSet: item.product.piecesPerSet,
-        wholesalePricePerSet: item.product.wholesalePricePerSet.toString(),
-        availableSets: item.product.availableSets,
-        isActive: item.product.isActive,
-        imageUrl: item.product.media[0]?.mediaAsset?.publicUrl || null,
-        vendorName: item.product.vendor?.businessName || "IcchaStore",
-      },
-      lineSubtotal: (
-        Number(item.product.wholesalePricePerSet) * item.sets
-      ).toFixed(2),
-    })),
-    totalSets: cart.items.reduce((sum, i) => sum + i.sets, 0),
-    totalDesigns: cart.items.length,
-    subtotal: cart.items
-      .reduce((sum, i) => sum + Number(i.product.wholesalePricePerSet) * i.sets, 0)
-      .toFixed(2),
-  };
-}
+import { getOrCreateCart, serializeCartFull } from "@/lib/cart-utils";
 
 export async function GET(request: NextRequest) {
   const guard = await requireRetailer(request);
@@ -89,12 +11,16 @@ export async function GET(request: NextRequest) {
   }
 
   const cart = await getOrCreateCart(guard.retailerProfile.id);
-  return NextResponse.json({ success: true, data: serializeCart(cart) });
+  const data = await serializeCartFull(cart, guard.retailerProfile.id);
+  return NextResponse.json({ success: true, data });
 }
+
+const NO_SIZE = "__NO_SIZE__";
 
 const addItemSchema = z.object({
   productId: z.string().uuid("Invalid product ID"),
   sets: z.number().int().min(1, "Must add at least 1 set"),
+  selectedSize: z.string().trim().min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -112,27 +38,44 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { productId, sets } = parsed.data;
+  const { productId, sets, selectedSize } = parsed.data;
 
-  const product = await prisma.product.findUnique({ where: { id: productId } });
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: { category: { select: { requiresSize: true } }, sizes: true },
+  });
   if (!product || !product.isActive) {
     return NextResponse.json({ success: false, error: "Product not found or unavailable" }, { status: 404 });
   }
 
-  if (sets > product.availableSets) {
-    return NextResponse.json(
-      { success: false, error: `Only ${product.availableSets} set(s) available` },
-      { status: 409 }
-    );
+  const normalizedSize = selectedSize?.trim() || NO_SIZE;
+
+  if (product.category.requiresSize) {
+    if (!selectedSize) {
+      return NextResponse.json({ success: false, error: "Please select a size before adding this product." }, { status: 400 });
+    }
+    const sizeRow = product.sizes.find((row) => row.size.toLowerCase() === selectedSize.trim().toLowerCase());
+    if (!sizeRow) {
+      return NextResponse.json({ success: false, error: "Selected size is not available for this product." }, { status: 409 });
+    }
+    if (sets > sizeRow.availableSets) {
+      return NextResponse.json({ success: false, error: `Only ${sizeRow.availableSets} set(s) available in size ${sizeRow.size}` }, { status: 409 });
+    }
+  } else if (selectedSize) {
+    return NextResponse.json({ success: false, error: "This product does not require size selection." }, { status: 400 });
+  } else if (sets > product.availableSets) {
+    return NextResponse.json({ success: false, error: `Only ${product.availableSets} set(s) available` }, { status: 409 });
   }
 
   const cart = await getOrCreateCart(guard.retailerProfile.id);
-
-  const existingItem = cart.items.find((i) => i.productId === productId);
+  const existingItem = cart.items.find((i) => i.productId === productId && i.selectedSize === normalizedSize);
 
   if (existingItem) {
     const newSets = existingItem.sets + sets;
-    if (newSets > product.availableSets) {
+    const maxSets = product.category.requiresSize
+      ? product.sizes.find((row) => row.size.toLowerCase() === normalizedSize.toLowerCase())?.availableSets ?? 0
+      : product.availableSets;
+    if (newSets > maxSets) {
       return NextResponse.json(
         { success: false, error: `Only ${product.availableSets} set(s) available (you already have ${existingItem.sets} in cart)` },
         { status: 409 }
@@ -144,10 +87,25 @@ export async function POST(request: NextRequest) {
     });
   } else {
     await prisma.cartItem.create({
-      data: { cartId: cart.id, productId, sets },
+      data: { cartId: cart.id, productId, sets, selectedSize: normalizedSize },
     });
   }
 
   const updatedCart = await getOrCreateCart(guard.retailerProfile.id);
-  return NextResponse.json({ success: true, data: serializeCart(updatedCart) }, { status: 201 });
+  const data = await serializeCartFull(updatedCart, guard.retailerProfile.id);
+  return NextResponse.json({ success: true, data }, { status: 201 });
+}
+
+export async function DELETE(request: NextRequest) {
+  const guard = await requireRetailer(request);
+  if ("error" in guard) {
+    return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+  }
+
+  const cart = await getOrCreateCart(guard.retailerProfile.id);
+  await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+  const updatedCart = await getOrCreateCart(guard.retailerProfile.id);
+  const data = await serializeCartFull(updatedCart, guard.retailerProfile.id);
+  return NextResponse.json({ success: true, data });
 }

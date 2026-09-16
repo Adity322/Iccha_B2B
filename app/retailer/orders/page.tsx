@@ -18,33 +18,65 @@ import {
 import RetailerHeader from '@/components/layout/RetailerHeader';
 import Footer from '@/components/layout/Footer';
 import EstimateViewModal from '@/components/order/EstimateViewModal';
-import { OrderService } from '@/lib/services';
-import { OrderEnquiry, EstimateDocument, OrderStatus } from '@/lib/types';
 import { useApp } from '@/lib/context/AppContext';
 
 export default function RetailerOrdersPage() {
   const { currentRetailer } = useApp();
-  const [orders, setOrders] = useState<OrderEnquiry[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEstimate, setSelectedEstimate] = useState<EstimateDocument | null>(null);
+  const [error, setError] = useState('');
+  const [selectedEstimate, setSelectedEstimate] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setLoading(true);
-      const data = await OrderService.getOrders(currentRetailer?.id ? { retailerId: currentRetailer.id } : undefined);
-      setOrders(data);
-      setLoading(false);
+      setError('');
+
+      try {
+        const response = await fetch('/api/retailer/order-enquiries', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        const json = await response.json();
+
+        if (!response.ok || !json.success) {
+          throw new Error(json.error || 'Could not load order enquiries.');
+        }
+
+        if (!cancelled) {
+          setOrders(json.data || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Could not load order enquiries.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
+
     load();
-  }, [currentRetailer]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredOrders = orders.filter(o => {
-    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
-    return true;
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'proforma_generated') {
+      return (o.estimates || []).length > 0;
+    }
+    return o.status === statusFilter;
   });
 
-  const getStatusBadge = (status: OrderStatus) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case 'enquiry_received':
         return <span className="bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full text-[10px] font-bold">Enquiry Received</span>;
@@ -127,6 +159,19 @@ export default function RetailerOrdersPage() {
             <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
               Loading orders...
             </div>
+          ) : error ? (
+            <div className="p-10 bg-white rounded-3xl border border-rose-200 text-center space-y-3">
+              <Receipt className="w-10 h-10 text-rose-300 mx-auto" />
+              <h3 className="font-serif text-lg font-bold text-stone-800">Could not load order enquiries</h3>
+              <p className="text-xs text-rose-700">{error}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-5 py-2.5 bg-[#831843] text-white text-xs font-bold rounded-xl"
+              >
+                Try Again
+              </button>
+            </div>
           ) : filteredOrders.length > 0 ? (
             <div className="space-y-4">
               {filteredOrders.map((order) => (
@@ -144,7 +189,7 @@ export default function RetailerOrdersPage() {
                         {getStatusBadge(order.status)}
                       </div>
                       <div className="text-xs text-stone-500 mt-0.5">
-                        Placed on: <strong>{order.createdAt}</strong> &bull; Total Volume: <strong>{order.totalSets} Sets ({order.totalPieces} Pieces)</strong>
+                        Placed on: <strong>{order.createdAt ? new Date(order.createdAt).toLocaleString('en-IN') : '—'}</strong> &bull; Total Volume: <strong>{order.totalSets} Sets ({order.totalPieces} Pieces)</strong>
                       </div>
                     </div>
 
@@ -176,7 +221,7 @@ export default function RetailerOrdersPage() {
                                 {isSurat ? 'Surat Division (GST A)' : 'Jaipur Unit (GST B)'}
                               </strong>
                               <span className="text-[10px] text-stone-600 font-mono">
-                                Proforma: #{est.estimateNumber} &bull; ₹{est.grandTotal.toLocaleString('en-IN')}
+                                Proforma: #{est.estimateNumber} &bull; ₹{Number(est.grandTotal || 0).toLocaleString('en-IN')}
                               </span>
                             </div>
                           </div>

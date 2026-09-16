@@ -19,8 +19,6 @@ import {
 import RetailerHeader from '@/components/layout/RetailerHeader';
 import Footer from '@/components/layout/Footer';
 import { useApp } from '@/lib/context/AppContext';
-import { OrderService } from '@/lib/services';
-import { Retailer } from '@/lib/types';
 
 export default function RetailerCheckoutPage() {
   const router = useRouter();
@@ -59,6 +57,7 @@ export default function RetailerCheckoutPage() {
 
   const handleSubmitOrderEnquiry = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (cart.items.length === 0) {
       router.push('/retailer/catalogue');
       return;
@@ -67,47 +66,41 @@ export default function RetailerCheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      const activeRetailer: Retailer = currentRetailer || {
-        id: 'ret-001',
-        businessName: 'Ananya Designer Boutiques',
-        applicantName: 'Ananya Rathore',
-        mobile: '+91 94140 77665',
-        whatsapp: '+91 94140 77665',
-        email: 'ananya@boutique.in',
-        gstin: '08AABCA1234F1Z8',
-        pan: 'AABCA1234F',
-        businessType: 'Boutique Owner',
-        classification: 'Standard Wholesale',
-        status: 'approved',
-        address: billingAddress,
-        createdAt: '2026-01-15',
-        totalOrdersCount: 4,
-        totalOrderValue: 245000
-      };
-
-      const order = await OrderService.createOrderEnquiry({
-        retailer: activeRetailer,
-        cartItems: cart.items,
-        shippingAddress,
-        customerRemarks: `Transport: ${transportAgency} (Station: ${preferredStation}). Remarks: ${remarks}`
+      const response = await fetch('/api/retailer/order-enquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          billingAddress,
+          shippingAddress,
+          transportAgency,
+          preferredStation,
+          remarks,
+        }),
       });
 
-      // Clear the cart state
-      clearCart();
+      const json = await response.json();
+
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || 'Could not create order enquiry.');
+      }
+
+      // The API has already cleared the database cart. This only refreshes the
+      // local AppContext state after a successful transaction.
+      await clearCart();
 
       addToast({
         type: 'success',
         title: 'Master Order Enquiry Created!',
-        message: `Order #${order.orderNumber} logged with ${(order.estimates || []).length} proforma estimates.`
+        message: `Order #${json.data.orderNumber} created with ${json.data.estimates.length} proforma estimate(s). Payment: Cash on Delivery.`,
       });
 
-      router.push(`/retailer/orders/${order.id}`);
+      router.push(`/retailer/orders/${json.data.id}`);
     } catch (err) {
-      console.error(err);
+      console.error('Order submission failed:', err);
       addToast({
         type: 'error',
         title: 'Submission Failed',
-        message: 'Could not create order enquiry. Please try again.'
+        message: err instanceof Error ? err.message : 'Could not create order enquiry. Please try again.',
       });
     } finally {
       setIsSubmitting(false);
@@ -376,14 +369,11 @@ export default function RetailerCheckoutPage() {
                   </div>
                 </div>
 
-                {/* Commercial RTGS Notice */}
-                <div className="p-4 bg-stone-900 text-stone-200 rounded-2xl space-y-1.5 text-[11px] leading-relaxed">
-                  <div className="text-amber-300 font-bold flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4" /> Direct RTGS Bank Settlement
+                {/* Cash on Delivery */}
+                <div className="p-4 bg-stone-900 text-stone-200 rounded-2xl space-y-2 text-[11px] leading-relaxed">
+                  <div className="text-emerald-300 font-bold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> Cash on Delivery (COD)
                   </div>
-                  <p className="text-stone-300">
-                    Upon submitting, you will receive two formal commercial Proforma Invoices with direct manufacturer RTGS / NEFT bank details for commercial payment.
-                  </p>
                 </div>
 
                 {/* Submit Master Order Button */}
@@ -393,7 +383,7 @@ export default function RetailerCheckoutPage() {
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#831843] to-[#9a3412] hover:from-[#701a75] hover:to-[#852e10] text-white font-bold text-xs shadow-xl transition flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                  <span>{isSubmitting ? 'Generating Proformas...' : 'Confirm & Submit Master Order Enquiry'}</span>
+                  <span>{isSubmitting ? 'Submitting Order...' : 'Confirm & Submit Master Order Enquiry'}</span>
                 </button>
 
                 <div className="text-center">

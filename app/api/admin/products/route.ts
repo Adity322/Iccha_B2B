@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireStaff, requireVendor } from "@/lib/auth/guard";
+import { resolveGstConfigId } from "@/lib/gst-config";
 
 const PAGE_SIZE = 20;
 const MIN_STOCK_SETS = 5;
@@ -25,14 +26,18 @@ const productFieldsSchema = z.object({
         `Minimum stock is ${MIN_STOCK_SETS} sets.`
     ),
 
-    sizeCombination: z.string(),
+    sizeCombination: z.string().optional(),
+    sizeStocks: z.array(z.object({
+        size: z.string().trim().min(1, "Size is required"),
+        availableSets: z.number().int().min(0, "Size stock cannot be negative"),
+    })).optional(),
     color: z.string(),
     fabric: z.string(),
     workType: z.string(),
     style: z.string(),
     clothingType: z.string(),
     hsnCode: z.string(),
-
+    billingEntityId: z.string().uuid("Billing entity is required"),
     mediaAssetIds: z.array(z.string()).optional(),
     vendorId: z.string().optional(),
     warehouseId: z.string().optional(),
@@ -134,14 +139,21 @@ async function validateVendorAndWarehouse(
 
 const productInclude = {
     category: {
-        select: { name: true },
+        select: { name: true, requiresSize: true },
     },
+
     vendor: {
         select: {
             id: true,
             businessName: true,
         },
     },
+
+    sizes: {
+        orderBy: { sortOrder: "asc" as const },
+        select: { id: true, size: true, availableSets: true, sortOrder: true },
+    },
+
     warehouse: {
         select: {
             id: true,
@@ -151,6 +163,28 @@ const productInclude = {
             isActive: true,
         },
     },
+
+    gstConfig: {
+        select: {
+            id: true,
+            hsnCode: true,
+            cgstRate: true,
+            sgstRate: true,
+            igstRate: true,
+            billingEntity: {
+                select: {
+                    id: true,
+                    code: true,
+                    legalName: true,
+                    tradeName: true,
+                    state: true,
+                    stateCode: true,
+                    gstin: true,
+                },
+            },
+        },
+    },
+
     media: {
         where: { isPrimary: true },
         take: 1,
@@ -188,6 +222,34 @@ export async function POST(request: NextRequest) {
 
         const data = parsed.data;
 
+        const category = await prisma.category.findUnique({
+            where: { id: data.categoryId },
+            select: { id: true, requiresSize: true },
+        });
+
+        if (!category) {
+            return NextResponse.json({ success: false, error: "Category not found." }, { status: 400 });
+        }
+
+        const sizeStocks = (data.sizeStocks ?? []).map((row) => ({
+            size: row.size.trim(),
+            availableSets: row.availableSets,
+        }));
+
+        if (category.requiresSize) {
+            if (sizeStocks.length === 0) {
+                return NextResponse.json({ success: false, error: "This category requires size-wise stock. Add at least one size." }, { status: 400 });
+            }
+            const normalized = sizeStocks.map((row) => row.size.toUpperCase());
+            if (new Set(normalized).size !== normalized.length) {
+                return NextResponse.json({ success: false, error: "Each size can be entered only once." }, { status: 400 });
+            }
+            const totalSizeSets = sizeStocks.reduce((sum, row) => sum + row.availableSets, 0);
+            if (totalSizeSets < MIN_STOCK_SETS) {
+                return NextResponse.json({ success: false, error: `Combined size stock must be at least ${MIN_STOCK_SETS} sets.` }, { status: 400 });
+            }
+        }
+
         const vendorId =
             auth.kind === "vendor"
                 ? auth.vendorProfile.id
@@ -209,9 +271,14 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const totalAvailablePieces =
-            data.availableSets * data.piecesPerSet;
-
+        const totalAvailableSets = category.requiresSize
+            ? sizeStocks.reduce((sum, row) => sum + row.availableSets, 0)
+            : data.availableSets;
+        const totalAvailablePieces = totalAvailableSets * data.piecesPerSet;
+        const gstConfigId = await resolveGstConfigId(
+            data.billingEntityId,
+            data.hsnCode
+        );
         const product = await prisma.product.create({
             data: {
                 sku: data.sku,
@@ -226,10 +293,12 @@ export async function POST(request: NextRequest) {
                 wholesalePricePerPiece: data.wholesalePricePerPiece,
                 piecesPerSet: data.piecesPerSet,
                 wholesalePricePerSet: data.wholesalePricePerSet,
-                availableSets: data.availableSets,
+                availableSets: totalAvailableSets,
                 totalAvailablePieces,
-
-                sizeCombination: data.sizeCombination,
+                gstConfigId,
+                sizeCombination: category.requiresSize
+                    ? sizeStocks.map((row) => row.size).join(", ")
+                    : "",
                 color: data.color,
                 fabric: data.fabric,
                 workType: data.workType,
@@ -239,6 +308,16 @@ export async function POST(request: NextRequest) {
 
                 vendorId,
                 warehouseId: data.warehouseId ?? null,
+
+                sizes: category.requiresSize
+                    ? {
+                        create: sizeStocks.map((row, index) => ({
+                            size: row.size,
+                            availableSets: row.availableSets,
+                            sortOrder: index,
+                        })),
+                    }
+                    : undefined,
 
                 media: {
                     create: (data.mediaAssetIds ?? []).map(
@@ -318,6 +397,34 @@ export async function PATCH(request: NextRequest) {
 
         const data = parsed.data;
 
+        const category = await prisma.category.findUnique({
+            where: { id: data.categoryId },
+            select: { id: true, requiresSize: true },
+        });
+
+        if (!category) {
+            return NextResponse.json({ success: false, error: "Category not found." }, { status: 400 });
+        }
+
+        const sizeStocks = (data.sizeStocks ?? []).map((row) => ({
+            size: row.size.trim(),
+            availableSets: row.availableSets,
+        }));
+
+        if (category.requiresSize) {
+            if (sizeStocks.length === 0) {
+                return NextResponse.json({ success: false, error: "This category requires size-wise stock. Add at least one size." }, { status: 400 });
+            }
+            const normalized = sizeStocks.map((row) => row.size.toUpperCase());
+            if (new Set(normalized).size !== normalized.length) {
+                return NextResponse.json({ success: false, error: "Each size can be entered only once." }, { status: 400 });
+            }
+            const totalSizeSets = sizeStocks.reduce((sum, row) => sum + row.availableSets, 0);
+            if (totalSizeSets < MIN_STOCK_SETS) {
+                return NextResponse.json({ success: false, error: `Combined size stock must be at least ${MIN_STOCK_SETS} sets.` }, { status: 400 });
+            }
+        }
+
         const existingProduct = await prisma.product.findUnique({
             where: { id: data.productId },
             select: {
@@ -370,9 +477,14 @@ export async function PATCH(request: NextRequest) {
             );
         }
 
-        const totalAvailablePieces =
-            data.availableSets * data.piecesPerSet;
-
+        const totalAvailableSets = category.requiresSize
+            ? sizeStocks.reduce((sum, row) => sum + row.availableSets, 0)
+            : data.availableSets;
+        const totalAvailablePieces = totalAvailableSets * data.piecesPerSet;
+        const gstConfigId = await resolveGstConfigId(
+            data.billingEntityId,
+            data.hsnCode
+        );
         const product = await prisma.product.update({
             where: {
                 id: data.productId,
@@ -391,37 +503,52 @@ export async function PATCH(request: NextRequest) {
                 wholesalePricePerPiece: data.wholesalePricePerPiece,
                 piecesPerSet: data.piecesPerSet,
                 wholesalePricePerSet: data.wholesalePricePerSet,
-                availableSets: data.availableSets,
+                availableSets: totalAvailableSets,
                 totalAvailablePieces,
 
-                sizeCombination: data.sizeCombination,
+                sizeCombination: category.requiresSize
+                    ? sizeStocks.map((row) => row.size).join(", ")
+                    : "",
                 color: data.color,
                 fabric: data.fabric,
                 workType: data.workType,
                 style: data.style,
                 clothingType: data.clothingType,
                 hsnCode: data.hsnCode,
-
+                gstConfigId,
                 vendorId,
                 warehouseId: data.warehouseId ?? null,
 
+                sizes: {
+                    deleteMany: {},
+                    ...(category.requiresSize
+                        ? {
+                            create: sizeStocks.map((row, index) => ({
+                                size: row.size,
+                                availableSets: row.availableSets,
+                                sortOrder: index,
+                            })),
+                        }
+                        : {}),
+                },
+
                 ...(data.mediaAssetIds &&
-                data.mediaAssetIds.length > 0
+                    data.mediaAssetIds.length > 0
                     ? {
-                          media: {
-                              deleteMany: {},
-                              create: data.mediaAssetIds.map(
-                                  (mediaAssetId, index) => ({
-                                      mediaAssetId,
-                                      mediaType:
-                                          index === 0
-                                              ? "MAIN_IMAGE"
-                                              : "ALTERNATE_IMAGE",
-                                      isPrimary: index === 0,
-                                  })
-                              ),
-                          },
-                      }
+                        media: {
+                            deleteMany: {},
+                            create: data.mediaAssetIds.map(
+                                (mediaAssetId, index) => ({
+                                    mediaAssetId,
+                                    mediaType:
+                                        index === 0
+                                            ? "MAIN_IMAGE"
+                                            : "ALTERNATE_IMAGE",
+                                    isPrimary: index === 0,
+                                })
+                            ),
+                        },
+                    }
                     : {}),
             },
             include: productInclude,
@@ -612,27 +739,27 @@ export async function GET(request: NextRequest) {
 
                 ...(search
                     ? {
-                          OR: [
-                              {
-                                  name: {
-                                      contains: search,
-                                      mode: "insensitive",
-                                  },
-                              },
-                              {
-                                  sku: {
-                                      contains: search,
-                                      mode: "insensitive",
-                                  },
-                              },
-                              {
-                                  designNumber: {
-                                      contains: search,
-                                      mode: "insensitive",
-                                  },
-                              },
-                          ],
-                      }
+                        OR: [
+                            {
+                                name: {
+                                    contains: search,
+                                    mode: "insensitive",
+                                },
+                            },
+                            {
+                                sku: {
+                                    contains: search,
+                                    mode: "insensitive",
+                                },
+                            },
+                            {
+                                designNumber: {
+                                    contains: search,
+                                    mode: "insensitive",
+                                },
+                            },
+                        ],
+                    }
                     : {}),
             },
 
@@ -641,9 +768,9 @@ export async function GET(request: NextRequest) {
 
             ...(cursor
                 ? {
-                      cursor: { id: cursor },
-                      skip: 1,
-                  }
+                    cursor: { id: cursor },
+                    skip: 1,
+                }
                 : {}),
 
             include: productInclude,

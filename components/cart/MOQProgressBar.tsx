@@ -1,16 +1,16 @@
 'use client';
 
 import React from 'react';
-import { 
-  CheckCircle2, 
-  AlertTriangle, 
-  PhoneCall, 
-  Video, 
-  Sparkles, 
-  ShieldCheck, 
-  ArrowRight 
+import {
+  CheckCircle2,
+  AlertTriangle,
+  PhoneCall,
+  Video,
+  Sparkles,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
-import { MOQEvaluation } from '@/lib/types';
+import { MOQEvaluation } from '@/lib/types/cart';
 import { useApp } from '@/lib/context/AppContext';
 
 interface MOQProgressBarProps {
@@ -24,16 +24,30 @@ export default function MOQProgressBar({ evaluation, onOpenSellerModal }: MOQPro
 
   if (!evaluation) return null;
 
-  const current = evaluation.currentSets;
-  const target = evaluation.requiredSets;
+  // Show whichever criterion is furthest from being met, not just sets —
+  // otherwise the bar can read "100%" while checkout is still blocked on pieces/designs/value.
+  const metrics = [
+    { label: 'Sets', current: evaluation.currentSets, required: evaluation.requiredSets },
+    { label: 'Pieces', current: evaluation.currentPieces, required: evaluation.requiredPieces },
+    { label: 'Designs', current: evaluation.currentDesigns, required: evaluation.requiredDesigns },
+  ];
+
+  const binding = metrics.reduce((worst, m) => {
+    const ratio = m.required > 0 ? m.current / m.required : 1;
+    const worstRatio = worst.required > 0 ? worst.current / worst.required : 1;
+    return ratio < worstRatio ? m : worst;
+  });
+
+  const current = binding.current;
+  const target = binding.required;
   const percent = Math.min(100, Math.round((current / (target || 1)) * 100));
 
+
   return (
-    <div className={`p-4 rounded-2xl border transition-all ${
-      evaluation.isMet
-        ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
-        : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm'
-    }`}>
+    <div className={`p-4 rounded-2xl border transition-all ${evaluation.isMet
+      ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+      : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm'
+      }`}>
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
@@ -62,12 +76,11 @@ export default function MOQProgressBar({ evaluation, onOpenSellerModal }: MOQPro
 
         {/* Status Chip */}
         <div className="self-start sm:self-center">
-          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-            evaluation.isMet
-              ? 'bg-emerald-600 text-white'
-              : 'bg-amber-200 text-amber-900 border border-amber-300'
-          }`}>
-            {current} / {target} Sets Selected ({percent}%)
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${evaluation.isMet
+            ? 'bg-emerald-600 text-white'
+            : 'bg-amber-200 text-amber-900 border border-amber-300'
+            }`}>
+            {current} / {target} {binding.label} ({percent}%)
           </span>
         </div>
       </div>
@@ -75,11 +88,10 @@ export default function MOQProgressBar({ evaluation, onOpenSellerModal }: MOQPro
       {/* Visual Progress Bar */}
       <div className="w-full bg-stone-200 rounded-full h-2.5 overflow-hidden my-3">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            evaluation.isMet
-              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600'
-              : 'bg-gradient-to-r from-amber-500 to-rose-600'
-          }`}
+          className={`h-full rounded-full transition-all duration-500 ${evaluation.isMet
+            ? 'bg-gradient-to-r from-emerald-500 to-emerald-600'
+            : 'bg-gradient-to-r from-amber-500 to-rose-600'
+            }`}
           style={{ width: `${percent}%` }}
         />
       </div>
