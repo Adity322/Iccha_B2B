@@ -1,102 +1,64 @@
-import { prisma } from "@/lib/db";
-
-const ACTIVE_ORDER_STATUSES = [
-  "ENQUIRY_RECEIVED",
-  "UNDER_REVIEW",
-  "SELLER_CONTACTED",
-  "ESTIMATE_GENERATED",
-  "CONFIRMED",
-  "AWAITING_PAYMENT",
-  "PROCESSING",
-  "READY_FOR_DISPATCH",
-  "DISPATCHED",
-] as const;
+import { prisma } from '@/lib/db';
 
 export class AdminDashboardService {
   static async getDashboard() {
     const [
-      pendingKycCount,
-      totalKycCount,
-
-      activeOrdersCount,
+      pendingKyc,
+      totalKyc,
       activeOrders,
-
-      activeProductsCount,
+      activeProducts,
       lowStockProducts,
-
-      approvedRetailersCount,
-      activeVendorsCount,
-
-      publishedHeroCount,
-      scheduledHeroCount,
-
+      approvedRetailers,
+      activeVendors,
       recentKyc,
       recentOrders,
     ] = await Promise.all([
-      /**
-       * KYC
-       */
+      // ---------------------------------------------------------
+      // Pending KYC
+      // ---------------------------------------------------------
       prisma.kYCApplication.count({
         where: {
           status: {
             in: [
-              "APPLICATION_RECEIVED",
-              "UNDER_REVIEW",
-              "ADDITIONAL_INFORMATION_REQUIRED",
+              'APPLICATION_RECEIVED',
+              'UNDER_REVIEW',
+              'ADDITIONAL_INFORMATION_REQUIRED',
             ],
           },
         },
       }),
 
+      // ---------------------------------------------------------
+      // Total KYC applications
+      // ---------------------------------------------------------
       prisma.kYCApplication.count(),
 
-      /**
-       * Active orders
-       */
+      // ---------------------------------------------------------
+      // Active order enquiries
+      // ---------------------------------------------------------
       prisma.orderEnquiry.count({
         where: {
           status: {
-            in: ACTIVE_ORDER_STATUSES as any,
+            notIn: [
+              'COMPLETED',
+              'CANCELLED',
+            ],
           },
         },
       }),
 
-      prisma.orderEnquiry.findMany({
-        where: {
-          status: {
-            in: ACTIVE_ORDER_STATUSES as any,
-          },
-        },
-
-        orderBy: {
-          createdAt: "desc",
-        },
-
-        take: 100,
-
-        select: {
-          id: true,
-          orderNumber: true,
-          retailerBusinessName: true,
-          retailerApplicantName: true,
-          totalDesigns: true,
-          totalSets: true,
-          totalPieces: true,
-          masterTotal: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-
-      /**
-       * Products
-       */
+      // ---------------------------------------------------------
+      // Active products
+      // ---------------------------------------------------------
       prisma.product.count({
         where: {
           isActive: true,
         },
       }),
 
+      // ---------------------------------------------------------
+      // Low-stock products
+      // ---------------------------------------------------------
       prisma.product.findMany({
         where: {
           isActive: true,
@@ -106,7 +68,7 @@ export class AdminDashboardService {
         },
 
         orderBy: {
-          availableSets: "asc",
+          availableSets: 'asc',
         },
 
         take: 10,
@@ -121,45 +83,30 @@ export class AdminDashboardService {
         },
       }),
 
-      /**
-       * Retailers
-       */
+      // ---------------------------------------------------------
+      // Approved retailers
+      // ---------------------------------------------------------
       prisma.retailerProfile.count({
         where: {
-          status: "APPROVED",
+          status: 'APPROVED',
         },
       }),
 
-      /**
-       * Vendors
-       */
+      // ---------------------------------------------------------
+      // Active vendors
+      // ---------------------------------------------------------
       prisma.vendorProfile.count({
         where: {
           isActive: true,
         },
       }),
 
-      /**
-       * Hero
-       */
-      prisma.heroSlide.count({
-        where: {
-          status: "PUBLISHED",
-        },
-      }),
-
-      prisma.heroSlide.count({
-        where: {
-          status: "SCHEDULED",
-        },
-      }),
-
-      /**
-       * Recent KYC
-       */
+      // ---------------------------------------------------------
+      // Recent KYC applications
+      // ---------------------------------------------------------
       prisma.kYCApplication.findMany({
         orderBy: {
-          submittedAt: "desc",
+          submittedAt: 'desc',
         },
 
         take: 5,
@@ -169,18 +116,19 @@ export class AdminDashboardService {
           businessName: true,
           applicantName: true,
           mobile: true,
+          email: true,
           gstin: true,
           status: true,
           submittedAt: true,
         },
       }),
 
-      /**
-       * Recent orders
-       */
+      // ---------------------------------------------------------
+      // Recent orders
+      // ---------------------------------------------------------
       prisma.orderEnquiry.findMany({
         orderBy: {
-          createdAt: "desc",
+          createdAt: 'desc',
         },
 
         take: 5,
@@ -190,6 +138,7 @@ export class AdminDashboardService {
           orderNumber: true,
           retailerBusinessName: true,
           retailerApplicantName: true,
+          totalDesigns: true,
           totalSets: true,
           totalPieces: true,
           masterTotal: true,
@@ -199,15 +148,35 @@ export class AdminDashboardService {
       }),
     ]);
 
-    const totalWholesalePipeline =
-      activeOrders.reduce(
+    // -----------------------------------------------------------
+    // Get all active orders for pipeline calculations
+    // -----------------------------------------------------------
+    const pipelineOrders =
+      await prisma.orderEnquiry.findMany({
+        where: {
+          status: {
+            notIn: [
+              'COMPLETED',
+              'CANCELLED',
+            ],
+          },
+        },
+
+        select: {
+          masterTotal: true,
+          totalSets: true,
+        },
+      });
+
+    const grossEnquiryPipeline =
+      pipelineOrders.reduce(
         (total, order) =>
           total + Number(order.masterTotal),
         0
       );
 
     const totalSetsInPipeline =
-      activeOrders.reduce(
+      pipelineOrders.reduce(
         (total, order) =>
           total + order.totalSets,
         0
@@ -215,41 +184,30 @@ export class AdminDashboardService {
 
     return {
       metrics: {
-        pendingKyc: pendingKycCount,
+        pendingKyc,
 
         totalKycApplications:
-          totalKycCount,
+          totalKyc,
 
         activeOrderEnquiries:
-          activeOrdersCount,
+          activeOrders,
 
-        wholesalePipeline:
-          totalWholesalePipeline,
+        grossEnquiryPipeline,
 
-        setsInPipeline:
-          totalSetsInPipeline,
+        totalSetsInPipeline,
 
-        activeProducts:
-          activeProductsCount,
+        activeProducts,
 
         lowStockProducts:
           lowStockProducts.length,
 
-        approvedRetailers:
-          approvedRetailersCount,
+        approvedRetailers,
 
-        activeVendors:
-          activeVendorsCount,
-
-        publishedHeroSlides:
-          publishedHeroCount,
-
-        scheduledHeroSlides:
-          scheduledHeroCount,
+        activeVendors,
       },
 
-      kyc: recentKyc.map(
-        (application) => ({
+      pendingKyc:
+        recentKyc.map((application) => ({
           id: application.id,
 
           businessName:
@@ -261,6 +219,9 @@ export class AdminDashboardService {
           mobile:
             application.mobile,
 
+          email:
+            application.email,
+
           gstin:
             application.gstin,
 
@@ -269,11 +230,10 @@ export class AdminDashboardService {
 
           submittedAt:
             application.submittedAt.toISOString(),
-        })
-      ),
+        })),
 
-      orders: recentOrders.map(
-        (order) => ({
+      recentOrders:
+        recentOrders.map((order) => ({
           id: order.id,
 
           orderNumber:
@@ -284,6 +244,9 @@ export class AdminDashboardService {
 
           retailerApplicantName:
             order.retailerApplicantName,
+
+          totalDesigns:
+            order.totalDesigns,
 
           totalSets:
             order.totalSets,
@@ -299,27 +262,27 @@ export class AdminDashboardService {
 
           createdAt:
             order.createdAt.toISOString(),
-        })
-      ),
+        })),
 
-      lowStock: lowStockProducts.map(
-        (product) => ({
+      lowStockProducts:
+        lowStockProducts.map((product) => ({
           id: product.id,
 
-          sku: product.sku,
+          sku:
+            product.sku,
 
           designNumber:
             product.designNumber,
 
-          name: product.name,
+          name:
+            product.name,
 
           availableSets:
             product.availableSets,
 
           totalAvailablePieces:
             product.totalAvailablePieces,
-        })
-      ),
+        })),
     };
   }
 }

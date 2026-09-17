@@ -1,15 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 
-import { requireStaff } from "@/lib/auth/guard";
-import { AdminDashboardService } from "@/lib/services/adminDashboardService";
+import { requireStaff } from '@/lib/auth/guard';
+import { AdminDashboardService } from '@/lib/services/adminDashboardService';
 
 export async function GET(
   request: NextRequest
 ) {
+  // -----------------------------------------------------------
+  // Authenticate admin/staff
+  // -----------------------------------------------------------
   const auth =
     await requireStaff(request);
 
-  if ("error" in auth) {
+  if ('error' in auth) {
     return NextResponse.json(
       {
         success: false,
@@ -28,23 +31,29 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
+
       data: dashboard,
+
       error: null,
     });
   } catch (error) {
     console.error(
-      "Admin dashboard error:",
+      'Admin dashboard API error:',
       error
     );
 
     return NextResponse.json(
       {
         success: false,
+
         data: null,
+
         error: {
-          code: "ADMIN_DASHBOARD_FAILED",
+          code:
+            'ADMIN_DASHBOARD_FETCH_FAILED',
+
           message:
-            "Failed to load admin dashboard",
+            'Failed to load admin dashboard',
         },
       },
       {
