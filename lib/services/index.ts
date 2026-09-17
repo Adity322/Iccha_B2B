@@ -1,12 +1,4 @@
-import {
-  Category,
-  Product,
-  BillingEntity,
-  Retailer,
-  RetailerStatus,
-  KYCApplication,
-  MOQRule,
-  MOQRuleConfig,
+import {Category,Product,BillingEntity,Retailer,RetailerStatus,KYCApplication,MOQRule,MOQRuleConfig,
   MOQEvaluation,
   CartItem,
   OrderEnquiry,
@@ -665,7 +657,7 @@ export const OrderService = {
     const todayStr = new Date().toISOString().split('T')[0];
 
     // Identify which entities are involved in this cart
-    const entityIds = Array.from(new Set(cartItems.map(i => i.billingEntityId))) as ('entity_a' | 'entity_b')[];
+    const entityIds = Array.from(new Set(cartItems.map(i => i.billingEntityId ?? 'entity_b'))) as ('entity_a' | 'entity_b')[];
 
     // Convert cart items to order items
     const orderItems = cartItems.map(item => {
@@ -676,7 +668,7 @@ export const OrderService = {
         sku: item.product.sku,
         designNumber: item.product.designNumber,
         categoryName: item.product.categoryName,
-        billingEntityId: item.billingEntityId,
+        billingEntityId: item.billingEntityId ?? 'entity_b',
         sets: item.selectedSets,
         piecesPerSet: item.piecesPerSet,
         totalPieces: item.totalPieces,

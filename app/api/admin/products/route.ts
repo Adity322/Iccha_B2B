@@ -685,24 +685,30 @@ export async function DELETE(request: NextRequest) {
     }
 }
 
-const SORT_OPTIONS = {
+const SORT_OPTIONS: Record<
+    string,
+    Prisma.ProductOrderByWithRelationInput[]
+> = {
     price_high: [
-        { wholesalePricePerSet: "desc" as const },
-        { id: "desc" as const },
+        { wholesalePricePerSet: "desc" },
+        { id: "desc" },
     ],
+
     price_low: [
-        { wholesalePricePerSet: "asc" as const },
-        { id: "desc" as const },
+        { wholesalePricePerSet: "asc" },
+        { id: "desc" },
     ],
+
     newest: [
-        { createdAt: "desc" as const },
-        { id: "desc" as const },
+        { createdAt: "desc" },
+        { id: "desc" },
     ],
+
     oldest: [
-        { createdAt: "asc" as const },
-        { id: "desc" as const },
+        { createdAt: "asc" },
+        { id: "desc" },
     ],
-} as const;
+};
 
 type SortKey = keyof typeof SORT_OPTIONS;
 

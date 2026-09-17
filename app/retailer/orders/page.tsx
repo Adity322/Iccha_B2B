@@ -203,7 +203,7 @@ export default function RetailerOrdersPage() {
 
                   {/* Dual Entity Proforma Badges */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    {(order.estimates || []).map((est) => {
+                    {(order.estimates || []).map((est: any) => {
                       const isSurat = est.billingEntity?.id === 'entity_a';
                       return (
                         <div

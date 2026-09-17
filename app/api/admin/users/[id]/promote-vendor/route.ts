@@ -66,6 +66,7 @@ export async function PATCH(
       }),
       prisma.vendorProfile.create({
         data: {
+          vendorCode: `VEN-${user.id}`,
           userId: user.id,
           businessName: rp.businessName,
           contactName: data.contactName || rp.applicantName,

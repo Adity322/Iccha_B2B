@@ -3,16 +3,16 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  Building2, 
-  ShoppingBag, 
-  Receipt, 
-  CheckCircle2, 
-  Truck, 
-  ShieldCheck, 
-  MapPin, 
-  ArrowLeft, 
-  ArrowRight, 
+import {
+  Building2,
+  ShoppingBag,
+  Receipt,
+  CheckCircle2,
+  Truck,
+  ShieldCheck,
+  MapPin,
+  ArrowLeft,
+  ArrowRight,
   Sparkles,
   FileCheck
 } from 'lucide-react';
@@ -22,11 +22,11 @@ import { useApp } from '@/lib/context/AppContext';
 
 export default function RetailerCheckoutPage() {
   const router = useRouter();
-  const { 
-    cart, 
-    currentRetailer, 
-    clearCart, 
-    addToast 
+  const {
+    cart,
+    currentRetailer,
+    clearCart,
+    addToast
   } = useApp();
 
   const [transportAgency, setTransportAgency] = useState('V-Trans Express Logistics');
@@ -130,7 +130,7 @@ export default function RetailerCheckoutPage() {
 
       <main className="flex-1 py-8 bg-[#faf8f5]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          
+
           {/* Breadcrumbs */}
           <nav className="text-xs text-stone-500 flex items-center gap-2">
             <Link href="/retailer" className="hover:text-stone-900">Retailer Portal</Link>
@@ -153,10 +153,10 @@ export default function RetailerCheckoutPage() {
           </div>
 
           <form onSubmit={handleSubmitOrderEnquiry} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
+
             {/* Left Column: Addresses & Logistics */}
             <div className="lg:col-span-7 space-y-6 text-xs">
-              
+
               {/* Retailer Identity Box */}
               <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
@@ -296,7 +296,7 @@ export default function RetailerCheckoutPage() {
 
             {/* Right Column: Multi-Entity Order Breakdown & Submission */}
             <div className="lg:col-span-5 space-y-6 text-xs">
-              
+
               {/* Dual Entity Preview Card */}
               <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-md space-y-5">
                 <div className="border-b border-stone-100 pb-3">
@@ -315,9 +315,8 @@ export default function RetailerCheckoutPage() {
                     return (
                       <div
                         key={summary.entityId}
-                        className={`p-4 rounded-2xl border space-y-2 ${
-                          isSurat ? 'bg-rose-50/60 border-rose-200' : 'bg-amber-50/60 border-amber-200'
-                        }`}
+                        className={`p-4 rounded-2xl border space-y-2 ${isSurat ? 'bg-rose-50/60 border-rose-200' : 'bg-amber-50/60 border-amber-200'
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -332,8 +331,12 @@ export default function RetailerCheckoutPage() {
                         </div>
 
                         <div className="text-[11px] text-stone-600 space-y-0.5">
-                          <div>Legal Entity: <strong>{summary.entity.legalName}</strong></div>
-                          <div>GSTIN: <span className="font-mono">{summary.entity.gstin}</span></div>
+                          <div>
+                            Legal Entity: <strong>{summary.entity?.legalName ?? "N/A"}</strong>
+                          </div>
+                          <div>
+                            GSTIN: <span className="font-mono">{summary.entity?.gstin ?? "N/A"}</span>
+                          </div>
                         </div>
 
                         <div className="pt-2 border-t border-stone-200/80 flex justify-between items-baseline font-medium">

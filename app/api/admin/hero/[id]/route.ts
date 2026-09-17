@@ -25,9 +25,9 @@ const updateHeroSlideSchema = z.object({
 
   primaryCtaUrl: z.string().optional(),
 
-  secondaryCtaLabel: z.string().nullable().optional(),
+  secondaryCtaLabel: z.string().optional(),
 
-  secondaryCtaUrl: z.string().nullable().optional(),
+  secondaryCtaUrl: z.string().optional(),
 
   contentPosition: z
     .enum(["left", "right", "center"])
@@ -41,40 +41,32 @@ const updateHeroSlideSchema = z.object({
 
   mobileImagePosition: z.string().optional(),
 
-  productId: z.string().nullable().optional(),
+  productId: z.string().optional(),
 
-  categoryId: z.string().nullable().optional(),
+  categoryId: z.string().optional(),
 
-  collectionId: z.string().nullable().optional(),
+  collectionId: z.string().optional(),
 
   fabricTags: z
     .array(z.string())
     .optional(),
 
-  editorialBadge: z.string().nullable().optional(),
+  editorialBadge: z.string().optional(),
 
   navLabel: z.string().optional(),
 
   sortOrder: z.number().int().optional(),
 
-  status: z
-    .enum([
-      "PUBLISHED",
-      "DRAFT",
-      "SCHEDULED",
-      "ARCHIVED",
-    ])
-    .optional(),
+  status: z.enum([
+    "PUBLISHED",
+    "DRAFT",
+    "SCHEDULED",
+    "ARCHIVED",
+  ]).optional(),
 
-  startAt: z
-    .string()
-    .nullable()
-    .optional(),
+  startAt: z.string().optional(),
 
-  endAt: z
-    .string()
-    .nullable()
-    .optional(),
+  endAt: z.string().optional(),
 });
 
 type Context = {
@@ -87,8 +79,7 @@ export async function GET(
   request: NextRequest,
   { params }: Context
 ) {
-  const auth =
-    await requireStaff(request);
+  const auth = await requireStaff(request);
 
   if ("error" in auth) {
     return NextResponse.json(
@@ -105,8 +96,7 @@ export async function GET(
 
   const { id } = await params;
 
-  const slide =
-    await HeroService.getSlideById(id);
+  const slide = await HeroService.getSlideById(id);
 
   if (!slide) {
     return NextResponse.json(
@@ -135,8 +125,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: Context
 ) {
-  const auth =
-    await requireStaff(request);
+  const auth = await requireStaff(request);
 
   if ("error" in auth) {
     return NextResponse.json(
@@ -154,22 +143,19 @@ export async function PATCH(
   try {
     const { id } = await params;
 
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const validated =
-      updateHeroSlideSchema.parse(body);
+    const validated = updateHeroSlideSchema.parse(body);
 
-    const slide =
-      await HeroService.updateSlide(
-        id,
-        validated,
-        {
-          id: auth.user.id,
-          email: auth.user.email,
-          role: auth.user.role,
-        }
-      );
+    const slide = await HeroService.updateSlide(
+      id,
+      validated,
+      {
+        id: auth.user.id,
+        email: auth.user.email,
+        role: auth.user.role,
+      }
+    );
 
     if (!slide) {
       return NextResponse.json(
@@ -178,8 +164,7 @@ export async function PATCH(
           data: null,
           error: {
             code: "HERO_SLIDE_NOT_FOUND",
-            message:
-              "Hero slide not found",
+            message: "Hero slide not found",
           },
         },
         {
@@ -201,8 +186,7 @@ export async function PATCH(
           data: null,
           error: {
             code: "VALIDATION_ERROR",
-            message:
-              "Invalid hero slide data",
+            message: "Invalid hero slide data",
             details: error.issues,
           },
         },
@@ -212,10 +196,7 @@ export async function PATCH(
       );
     }
 
-    console.error(
-      "Hero update error:",
-      error
-    );
+    console.error("Hero update error:", error);
 
     return NextResponse.json(
       {
@@ -238,10 +219,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: Context
+  { params }: Context 
 ) {
-  const auth =
-    await requireStaff(request);
+  const auth = await requireStaff(request);
 
   if ("error" in auth) {
     return NextResponse.json(
@@ -258,15 +238,14 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const archived =
-    await HeroService.archiveSlide(
-      id,
-      {
-        id: auth.user.id,
-        email: auth.user.email,
-        role: auth.user.role,
-      }
-    );
+  const archived = await HeroService.archiveSlide(
+    id,
+    {
+      id: auth.user.id,
+      email: auth.user.email,
+      role: auth.user.role,
+    }
+  );
 
   if (!archived) {
     return NextResponse.json(
@@ -275,8 +254,7 @@ export async function DELETE(
         data: null,
         error: {
           code: "HERO_SLIDE_NOT_FOUND",
-          message:
-            "Hero slide not found",
+          message: "Hero slide not found",
         },
       },
       {
