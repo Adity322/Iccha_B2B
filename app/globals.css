@@ -52,6 +52,10 @@ body {
   font-family: 'Georgia', 'Playfair Display', Cambria, 'Times New Roman', serif;
 }
 
+.font-serif {
+  font-family: 'Georgia', 'Playfair Display', Cambria, 'Times New Roman', serif;
+}
+
 /* Custom Scrollbar for catalogues & tables */
 ::-webkit-scrollbar {
   width: 5px;

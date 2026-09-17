@@ -41,16 +41,16 @@ export default async function HomePage() {
         {/* ========================================================================= */}
         {/* 2. CATEGORY DISCOVERY (20 Categories Grid) */}
         {/* ========================================================================= */}
-        <section className="py-20 bg-[#f9f7f2]">
+        <section className="py-20 bg-[#f9f7f2] shadow-[inset_0_1px_0_rgba(0,0,0,0.03)]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12 pb-6 border-b border-black/10">
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-[0.4em] text-stone-500 block mb-2">
+                <span className="text-[10px] uppercase font-bold tracking-[0.4em] text-[var(--text-subtle)] block mb-2">
                   Catalogue Archives &bull; 20 Editions
                 </span>
                 <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-normal text-[#1a1a1a] tracking-tight">
-                  Wholesale Categories <span className="italic font-light text-stone-600">Overview</span>
+                  Wholesale Categories <span className="italic font-light text-[var(--text-muted)]">Overview</span>
                 </h2>
               </div>
 
@@ -69,7 +69,7 @@ export default async function HomePage() {
                 <Link
                   key={category.id}
                   href={`/categories/${category.slug}`}
-                  className="group relative bg-[#f5f2ea] border border-black/10 hover:border-black/40 transition-all duration-300 flex flex-col h-full overflow-hidden"
+                  className="group relative bg-[#f5f2ea] border border-black/10 hover:border-black transition-all duration-300 flex flex-col h-full overflow-hidden"
                 >
                   <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#ded9d0]">
                     <Image
@@ -88,7 +88,7 @@ export default async function HomePage() {
                     </div>
 
                     <div className="absolute bottom-3 left-3 right-3 text-white">
-                      <span className="text-[9px] uppercase font-bold text-amber-300 tracking-[0.2em] block mb-0.5">
+                      <span className="text-[9px] uppercase font-bold text-[var(--brand-accent)] tracking-[0.2em] block mb-0.5">
                         {category.subcategories[0]}
                       </span>
                       <h3 className="font-serif text-lg font-normal leading-tight group-hover:italic transition">
@@ -98,7 +98,7 @@ export default async function HomePage() {
                   </div>
 
                   <div className="p-4 flex-1 flex flex-col justify-between space-y-3 bg-[#f9f7f2]">
-                    <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-[var(--text-muted)] line-clamp-2 leading-relaxed">
                       {category.representativeTagline}
                     </p>
                     <div className="pt-2 border-t border-black/5 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-[#1a1a1a]">
@@ -123,7 +123,7 @@ export default async function HomePage() {
             <div className="bg-[#1a1a1a] text-[#f9f7f2] p-8 sm:p-12 mb-12 shadow-sm relative overflow-hidden border border-black/20">
               <div className="relative z-10 max-w-2xl space-y-4">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 text-[#f9f7f2] text-[9px] font-bold uppercase tracking-[0.25em] border border-white/20">
-                  <Lock className="w-3 h-3 text-amber-300" /> Protected Lot Catalogue
+                  <Lock className="w-3 h-3 text-[var(--brand-accent)]" /> Protected Lot Catalogue
                 </div>
                 <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-normal tracking-tight">
                   Representative <span className="italic font-light text-stone-300">Lot Studies</span>
@@ -136,7 +136,7 @@ export default async function HomePage() {
                     href="/register"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-[#f9f7f2] hover:bg-white text-[#1a1a1a] text-[10px] uppercase tracking-[0.25em] font-bold shadow-sm transition"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <Sparkles className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
                     Apply for Verification
                   </Link>
                 </div>
@@ -160,42 +160,42 @@ export default async function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             <div className="text-left max-w-3xl mb-16 space-y-2 pb-6 border-b border-black/10">
-              <span className="text-[10px] uppercase font-bold tracking-[0.4em] text-stone-500 block">
+              <span className="text-[10px] uppercase font-bold tracking-[0.4em] text-[var(--text-subtle)] block">
                 Methodology &amp; Standards
               </span>
               <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-normal text-[#1a1a1a] tracking-tight">
-                Engineered for High-Margin <span className="italic font-light text-stone-600">Garment Retailing</span>
+                Engineered for High-Margin <span className="italic font-light text-[var(--text-muted)]">Garment Retailing</span>
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               
               <div className="p-8 bg-[#f9f7f2] border border-black/15 hover:border-black transition space-y-4">
-                <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-amber-700 block">Study 01</span>
+                <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--brand-accent)] block">Study 01</span>
                 <h3 className="font-serif text-2xl font-normal text-[#1a1a1a]">
                   Organized Set Lots
                 </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                   Every design is packed in standard, market-tested size combinations (e.g. M-38, L-40, XL-42, XXL-44) ensuring rapid shelf rotation without dead sizes.
                 </p>
               </div>
 
               <div className="p-8 bg-[#f9f7f2] border border-black/15 hover:border-black transition space-y-4">
-                <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-amber-700 block">Study 02</span>
+                <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--brand-accent)] block">Study 02</span>
                 <h3 className="font-serif text-2xl font-normal text-[#1a1a1a]">
                   Dual GST Production
                 </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                   Direct billing from Surat (Chanderi, Muslin & Festive Silk 3-Pc) and Jaipur (Cambric 60x60 Cotton, Handblocks & 2-Pc Sets) for clean input tax credit.
                 </p>
               </div>
 
               <div className="p-8 bg-[#f9f7f2] border border-black/15 hover:border-black transition space-y-4">
-                <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-amber-700 block">Study 03</span>
+                <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--brand-accent)] block">Study 03</span>
                 <h3 className="font-serif text-2xl font-normal text-[#1a1a1a]">
                   Strict Price Shield
                 </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                   Your retail customers will never see wholesale margins or supplier prices on IcchaStore. Commercial access is strictly gated behind verified KYC.
                 </p>
               </div>
@@ -214,7 +214,7 @@ export default async function HomePage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
               <div className="lg:col-span-5 space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 text-[#f9f7f2] text-[9px] uppercase tracking-[0.25em] font-bold border border-white/20">
-                  <Award className="w-3.5 h-3.5 text-amber-400" />
+                  <Award className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
                   <span>Manufacturing Standards</span>
                 </div>
 
@@ -229,15 +229,15 @@ export default async function HomePage() {
 
                 <div className="space-y-3 text-xs text-stone-300">
                   <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-[var(--brand-accent)] shrink-0" />
                     <span>Liva certified heavy 14kg rayon & 60x60 Cambric cotton</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-[var(--brand-accent)] shrink-0" />
                     <span>Original Zari weaving & pure organza cutwork embroidery</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-[var(--brand-accent)] shrink-0" />
                     <span>Guaranteed colorfastness & zero shrinkage stitching allowance</span>
                   </div>
                 </div>
@@ -248,33 +248,30 @@ export default async function HomePage() {
                     className="inline-flex items-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/20 text-[#f9f7f2] text-[10px] uppercase tracking-[0.25em] font-bold border border-white/20 transition"
                   >
                     <span>View Factory Videos</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                    <ArrowRight className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
                   </Link>
                 </div>
               </div>
 
               {/* Video Preview Graphic */}
               <div className="lg:col-span-7">
-                <div className="relative aspect-video overflow-hidden border border-white/20 bg-[#1c1c1c] group">
+                <Link href="/videos" className="relative aspect-video overflow-hidden border border-white/20 bg-[#1c1c1c] group block">
                   <Image
                     src="https://images.unsplash.com/photo-1551803091-e20673f15770?w=1000&auto=format&fit=crop&q=80"
-                    alt="IcchaStore Kurti Production & Craft"
-                    fill
-                    className="object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                    <Link
-                      href="/videos"
-                      className="w-16 h-16 rounded-full bg-[#f9f7f2] text-[#1a1a1a] flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition"
-                    >
+                    alt="IcchaStore Kurti Production & Craft" fill
+                    className="object-cover opacity-60 group-hover:opacity-75 group-hover:scale-105 transition-all duration-300" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors duration-300 flex flex-col items-center justify-center gap-3">
+                    <div className="w-16 h-16 rounded-full bg-[#f9f7f2] text-[#1a1a1a] flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition duration-300">
                       <Play className="w-6 h-6 fill-[#1a1a1a] translate-x-0.5" />
-                    </Link>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-[0.25em] font-bold text-white/90">
+                      Watch Factory Videos
+                    </span>
                   </div>
                   <div className="absolute bottom-4 left-4 bg-black/80 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] font-bold text-stone-200 border border-white/10">
                     Surat Facility &bull; 3-Pc Festive Set Inspection
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
 
@@ -282,7 +279,7 @@ export default async function HomePage() {
             <div className="mt-16 pt-12 border-t border-white/10">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <Instagram className="w-4 h-4 text-amber-400" />
+                  <Instagram className="w-4 h-4 text-[var(--brand-accent)]" />
                   <span className="font-serif italic text-lg text-stone-200">Lookbook Archives</span>
                 </div>
                 <span className="text-[10px] uppercase tracking-[0.25em] font-bold text-stone-400">@icchastore.official</span>
@@ -304,7 +301,7 @@ export default async function HomePage() {
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <div className="absolute bottom-3 left-3 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300">
+                    <div className="absolute bottom-3 left-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--brand-accent)]">
                       {reel.tag}
                     </div>
                   </div>
@@ -327,10 +324,10 @@ export default async function HomePage() {
 
             <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-[#1a1a1a] tracking-tight">
               Ready to Stock <br />
-              <span className="italic font-light text-stone-600">Curated Kurti Sets?</span>
+              <span className="italic font-light text-[var(--text-muted)]">Curated Kurti Sets?</span>
             </h2>
 
-            <p className="font-serif italic text-base sm:text-lg text-stone-600 max-w-xl mx-auto leading-relaxed">
+            <p className="font-serif italic text-base sm:text-lg text-[var(--text-muted)] max-w-xl mx-auto leading-relaxed">
               Join 1,200+ verified boutique owners and garment retailers across India. Submit your GSTIN for prompt access.
             </p>
 
@@ -339,7 +336,7 @@ export default async function HomePage() {
                 href="/register"
                 className="w-full sm:w-auto px-10 py-4 text-[10px] font-bold uppercase tracking-[0.3em] text-[#f9f7f2] bg-[#1a1a1a] hover:bg-black rounded-sm shadow-sm transition flex items-center justify-center gap-2"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <Sparkles className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
                 <span>Apply as Retailer</span>
               </Link>
 
@@ -351,7 +348,7 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <p className="text-[11px] text-stone-500 pt-2 tracking-wide">
+            <p className="text-[11px] text-[var(--text-subtle)] pt-2 tracking-wide">
               Registration requires GSTIN or valid Shop &amp; Establishment proof. Verification turnaround: 24 business hours.
             </p>
 
