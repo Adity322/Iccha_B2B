@@ -139,8 +139,30 @@ export default function WebGLHeroSlider({
   const touchStartXRef = useRef<number>(0);
   const touchEndXRef = useRef<number>(0);
 
-  const currentSlide = slides[currentIndex] || slides[0];
+  const currentSlide = slides[currentIndex] || slides[0] || null;
+  if (!currentSlide) {
+  return (
+    <section
+      id="hero-slider-container"
+      className="relative flex min-h-[60svh] w-full items-center justify-center overflow-hidden bg-[#141414] text-white"
+      aria-label="Hero banner"
+    >
+      <div className="px-6 text-center">
+        <p className="mb-3 text-xs uppercase tracking-[0.3em] text-white/50">
+          ICCHASTORE
+        </p>
 
+        <h1 className="text-3xl font-medium md:text-5xl">
+          Discover Our Collection
+        </h1>
+
+        <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-white/60 md:text-base">
+          Our latest collection will appear here soon.
+        </p>
+      </div>
+    </section>
+  );
+}
   // Animate Typography on Slide Change
   const animateTextIn = useCallback(() => {
     if (!textWrapperRef.current) return;

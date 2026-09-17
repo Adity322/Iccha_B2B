@@ -1107,20 +1107,37 @@ export default function AdminProductsPage() {
                   </div>
                   <div>
                     <label className="block font-bold text-stone-800 mb-1">Stock (Sets) *</label>
-                    <input
-                      type="number"
-                      required
-                      min={5}
-                      value={formData.availableSets}
-                      onChange={e => setFormData({
-                        ...formData,
-                        availableSets: Number(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
-                    />
-                    <p className="text-[10px] text-stone-400 mt-1">
-                      Minimum 5 sets required.
-                    </p>
+                    {categories.find(c => c.id === formData.categoryId)?.requiresSize ? (
+                      <>
+                        <input
+                          type="number"
+                          disabled
+                          readOnly
+                          value={sizeStocks.reduce((sum, item) => sum + Number(item.availableSets || 0), 0)}
+                          className="w-full px-3 py-2 bg-stone-100 border border-stone-200 rounded-xl font-mono font-bold text-stone-500 cursor-not-allowed"
+                        />
+                        <p className="text-[10px] text-stone-400 mt-1">
+                          Auto-calculated from the size-wise stock below.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="number"
+                          required
+                          min={5}
+                          value={formData.availableSets}
+                          onChange={e => setFormData({
+                            ...formData,
+                            availableSets: Number(e.target.value)
+                          })}
+                          className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                        />
+                        <p className="text-[10px] text-stone-400 mt-1">
+                          Minimum 5 sets required.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
                 <p className="text-[10px] text-stone-400 -mt-2">

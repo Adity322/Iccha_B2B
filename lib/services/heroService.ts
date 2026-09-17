@@ -1,303 +1,960 @@
-import { HeroSlide, HeroSliderConfig, CreateHeroSlideDTO } from '@/lib/types/hero';
-import { MOCK_HERO_SLIDES, HERO_SLIDER_CONFIG } from '@/lib/data/heroData';
-import { AuditService } from '@/lib/services/auditService';
+import { prisma } from "@/lib/db";
+import { AuditService } from "@/lib/services/auditService";
+import {
+  CreateHeroSlideDTO,
+  HeroSlide,
+  HeroSliderConfig,
+} from "@/lib/types/hero";
+import {
+  HeroContentPosition,
+  HeroSlideStatus,
+  HeroTextTheme,
+  Prisma,
+} from "@prisma/client";
+import { HERO_SLIDER_CONFIG } from "@/lib/data/heroData";
 
-// In-Memory dynamic store with initial mock data
-let heroSlidesStore: HeroSlide[] = [...MOCK_HERO_SLIDES.map((slide, index) => ({
-  ...slide,
-  internalName: slide.navLabel,
-  sortOrder: index + 1,
-  status: 'PUBLISHED' as const,
-  publishedAt: new Date().toISOString(),
-  startAt: null,
-  endAt: null,
-}))];
+type Actor = {
+  id?: string;
+  email?: string;
+  role?: string;
+};
 
-let heroConfigStore: HeroSliderConfig = { ...HERO_SLIDER_CONFIG };
+function parseFabricTags(value: string | null): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseDate(value?: string | null): Date | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid date: ${value}`);
+  }
+
+  return date;
+}
+
+function mapHeroSlide(slide: any): HeroSlide {
+  return {
+    id: slide.id,
+
+    internalName: slide.internalName,
+    slideNumber: slide.slideNumber,
+    navLabel: slide.navLabel,
+
+    eyebrow: slide.eyebrow,
+    title: slide.title,
+    description: slide.description,
+
+    desktopImage:
+      slide.desktopAsset?.publicUrl ||
+      slide.desktopImageUrl,
+
+    mobileImage:
+      slide.mobileAsset?.publicUrl ||
+      slide.mobileImageUrl ||
+      slide.desktopAsset?.publicUrl ||
+      slide.desktopImageUrl,
+
+    imageAlt: slide.imageAlt,
+
+    primaryCTA: {
+      label: slide.primaryCtaLabel,
+      href: slide.primaryCtaUrl,
+    },
+
+    secondaryCTA: slide.secondaryCtaLabel
+      ? {
+          label: slide.secondaryCtaLabel,
+          href: slide.secondaryCtaUrl || "/register",
+        }
+      : undefined,
+
+    contentPosition: slide.contentPosition.toLowerCase() as
+      | "left"
+      | "right"
+      | "center",
+
+    textTheme: slide.textTheme.toLowerCase() as
+      | "light"
+      | "dark",
+
+    desktopImagePosition: slide.desktopImagePosition,
+    mobileImagePosition: slide.mobileImagePosition,
+
+    productId: slide.linkedProductId || undefined,
+    categoryId: slide.linkedCategoryId || undefined,
+    collectionId: slide.linkedCollectionId || undefined,
+
+    fabricTags: parseFabricTags(slide.fabricTagsJson),
+
+    editorialBadge: slide.editorialBadge || undefined,
+
+    sortOrder: slide.sortOrder,
+
+    status: slide.status,
+
+    startAt: slide.startAt?.toISOString() || null,
+    endAt: slide.endAt?.toISOString() || null,
+
+    publishedAt: slide.publishedAt?.toISOString() || null,
+
+    updatedAt: slide.updatedAt?.toISOString(),
+  };
+}
+
+function serializeSlide(slide: any): HeroSlide {
+  return mapHeroSlide(slide);
+}
+
+const heroInclude = {
+  desktopAsset: true,
+  mobileAsset: true,
+} satisfies Prisma.HeroSlideInclude;
 
 export class HeroService {
   /**
-   * Returns active published hero slides for public visitors.
-   * Filters by status = PUBLISHED and active scheduling window (startAt <= now <= endAt).
+   * Public hero slides.
+   *
+   * Only PUBLISHED slides inside their scheduling window
+   * are returned.
    */
   static async getHeroSlides(): Promise<HeroSlide[]> {
     const now = new Date();
-    
-    const active = heroSlidesStore.filter((slide) => {
-      // Must be PUBLISHED
-      if (slide.status && slide.status !== 'PUBLISHED') return false;
 
-      // Check start date schedule
-      if (slide.startAt && new Date(slide.startAt) > now) return false;
+    const slides = await prisma.heroSlide.findMany({
+      where: {
+        status: HeroSlideStatus.PUBLISHED,
 
-      // Check end date schedule
-      if (slide.endAt && new Date(slide.endAt) < now) return false;
+        AND: [
+          {
+            OR: [
+              { startAt: null },
+              { startAt: { lte: now } },
+            ],
+          },
+          {
+            OR: [
+              { endAt: null },
+              { endAt: { gte: now } },
+            ],
+          },
+        ],
+      },
 
-      return true;
+      include: heroInclude,
+
+      orderBy: {
+        sortOrder: "asc",
+      },
     });
 
-    // Fallback protection: if all slides are scheduled out/archived, return default slide
-    if (active.length === 0 && heroSlidesStore.length > 0) {
-      return [heroSlidesStore[0]];
-    }
-
-    return active.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    return slides.map(serializeSlide);
   }
 
   /**
-   * Returns default hero slider configuration.
+   * Hero slider configuration.
+   *
+   * Stored in SiteSetting so it survives deployments.
    */
   static async getHeroConfig(): Promise<HeroSliderConfig> {
-    return heroConfigStore;
-  }
-
-  /**
-   * Admin: Get all slides with internal status & scheduling metadata
-   */
-  static async getAllAdminSlides(): Promise<HeroSlide[]> {
-    return [...heroSlidesStore].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-  }
-
-  /**
-   * Admin: Get single slide by ID
-   */
-  static async getSlideById(id: string): Promise<HeroSlide | null> {
-    const slide = heroSlidesStore.find((s) => s.id === id);
-    return slide ? { ...slide } : null;
-  }
-
-  /**
-   * Admin: Create new hero slide
-   */
-  static async createSlide(dto: CreateHeroSlideDTO, actorEmail = 'admin@icchastore.com'): Promise<HeroSlide> {
-    const nextOrder = heroSlidesStore.length + 1;
-    const slideNum = String(nextOrder).padStart(2, '0');
-
-    const newSlide: HeroSlide = {
-      id: `hero-slide-${Date.now()}`,
-      internalName: dto.internalName || `Slide ${slideNum}`,
-      slideNumber: slideNum,
-      navLabel: dto.navLabel || dto.eyebrow.slice(0, 14) || `Slide ${slideNum}`,
-      eyebrow: dto.eyebrow,
-      title: dto.title,
-      description: dto.description,
-      desktopImage: dto.desktopImage,
-      mobileImage: dto.mobileImage || dto.desktopImage,
-      imageAlt: dto.imageAlt || dto.title.replace('\n', ' '),
-      primaryCTA: {
-        label: dto.primaryCtaLabel || 'EXPLORE COLLECTION',
-        href: dto.primaryCtaUrl || '/collections',
+    const setting = await prisma.siteSetting.findUnique({
+      where: {
+        key: "hero_slider_config",
       },
-      secondaryCTA: dto.secondaryCtaLabel ? {
-        label: dto.secondaryCtaLabel,
-        href: dto.secondaryCtaUrl || '/register',
-      } : undefined,
-      contentPosition: dto.contentPosition || 'left',
-      textTheme: dto.textTheme || 'light',
-      desktopImagePosition: dto.desktopImagePosition || 'center 25%',
-      mobileImagePosition: dto.mobileImagePosition || '60% 20%',
-      productId: dto.productId,
-      categoryId: dto.categoryId,
-      collectionId: dto.collectionId,
-      fabricTags: dto.fabricTags || ['Stitched Kurti Set'],
-      editorialBadge: dto.editorialBadge || 'Direct Factory Archive',
-      sortOrder: dto.sortOrder !== undefined ? dto.sortOrder : nextOrder,
-      status: dto.status || 'PUBLISHED',
-      startAt: dto.startAt || null,
-      endAt: dto.endAt || null,
-      publishedAt: dto.status === 'PUBLISHED' ? new Date().toISOString() : null,
-      updatedAt: new Date().toISOString(),
-    };
-
-    heroSlidesStore.push(newSlide);
-
-    await AuditService.log({
-      actorEmail,
-      action: 'HERO_SLIDE_CREATED',
-      entityType: 'HeroSlide',
-      entityId: newSlide.id,
-      metadata: { title: newSlide.title, status: newSlide.status },
     });
 
-    HeroService.invalidateCache();
-    return newSlide;
+    if (!setting) {
+      return HERO_SLIDER_CONFIG;
+    }
+
+    try {
+      return {
+        ...HERO_SLIDER_CONFIG,
+        ...JSON.parse(setting.value),
+      };
+    } catch {
+      return HERO_SLIDER_CONFIG;
+    }
   }
 
   /**
-   * Admin: Update existing hero slide
+   * Admin: all slides.
+   */
+  static async getAllAdminSlides(): Promise<HeroSlide[]> {
+    const slides = await prisma.heroSlide.findMany({
+      include: heroInclude,
+
+      orderBy: [
+        {
+          sortOrder: "asc",
+        },
+        {
+          createdAt: "asc",
+        },
+      ],
+    });
+
+    return slides.map(serializeSlide);
+  }
+
+  /**
+   * Admin: single slide.
+   */
+  static async getSlideById(
+    id: string
+  ): Promise<HeroSlide | null> {
+    const slide = await prisma.heroSlide.findUnique({
+      where: {
+        id,
+      },
+
+      include: heroInclude,
+    });
+
+    if (!slide) {
+      return null;
+    }
+
+    return serializeSlide(slide);
+  }
+
+  /**
+   * Create hero slide.
+   */
+  static async createSlide(
+    dto: CreateHeroSlideDTO,
+    actor: Actor = {}
+  ): Promise<HeroSlide> {
+    const lastSlide = await prisma.heroSlide.findFirst({
+      orderBy: {
+        sortOrder: "desc",
+      },
+
+      select: {
+        sortOrder: true,
+      },
+    });
+
+    const nextOrder = (lastSlide?.sortOrder || 0) + 1;
+
+    const slideNumber = String(nextOrder).padStart(2, "0");
+
+    const requestedStatus =
+      dto.status || "DRAFT";
+
+    const status =
+      requestedStatus === "SCHEDULED"
+        ? HeroSlideStatus.SCHEDULED
+        : requestedStatus === "PUBLISHED"
+        ? HeroSlideStatus.PUBLISHED
+        : requestedStatus === "ARCHIVED"
+        ? HeroSlideStatus.ARCHIVED
+        : HeroSlideStatus.DRAFT;
+
+    const startAt = parseDate(dto.startAt);
+    const endAt = parseDate(dto.endAt);
+
+    if (startAt && endAt && startAt >= endAt) {
+      throw new Error("startAt must be before endAt");
+    }
+
+    const contentPosition =
+      (dto.contentPosition || "left").toUpperCase() as HeroContentPosition;
+
+    const textTheme =
+      (dto.textTheme || "light").toUpperCase() as HeroTextTheme;
+
+    const slide = await prisma.heroSlide.create({
+      data: {
+        internalName:
+          dto.internalName || `Slide ${slideNumber}`,
+
+        slideNumber,
+
+        navLabel:
+          dto.navLabel ||
+          dto.eyebrow.slice(0, 30) ||
+          `Slide ${slideNumber}`,
+
+        eyebrow: dto.eyebrow,
+        title: dto.title,
+        description: dto.description,
+
+        desktopImageUrl: dto.desktopImage,
+
+        mobileImageUrl:
+          dto.mobileImage || dto.desktopImage,
+
+        imageAlt:
+          dto.imageAlt ||
+          dto.title.replace(/\n/g, " "),
+
+        primaryCtaLabel:
+          dto.primaryCtaLabel ||
+          "EXPLORE COLLECTION",
+
+        primaryCtaUrl:
+          dto.primaryCtaUrl ||
+          "/collections",
+
+        secondaryCtaLabel:
+          dto.secondaryCtaLabel || null,
+
+        secondaryCtaUrl:
+          dto.secondaryCtaUrl || null,
+
+        contentPosition,
+
+        textTheme,
+
+        desktopImagePosition:
+          dto.desktopImagePosition ||
+          "center 25%",
+
+        mobileImagePosition:
+          dto.mobileImagePosition ||
+          "60% 20%",
+
+        linkedProductId:
+          dto.productId || null,
+
+        linkedCategoryId:
+          dto.categoryId || null,
+
+        linkedCollectionId:
+          dto.collectionId || null,
+
+        fabricTagsJson: JSON.stringify(
+          dto.fabricTags || []
+        ),
+
+        editorialBadge:
+          dto.editorialBadge ||
+          "Direct Factory Archive",
+
+        sortOrder:
+          dto.sortOrder ?? nextOrder,
+
+        status,
+
+        startAt,
+        endAt,
+
+        publishedAt:
+          status === HeroSlideStatus.PUBLISHED
+            ? new Date()
+            : null,
+
+        createdById:
+          actor.id || null,
+
+        updatedById:
+          actor.id || null,
+      },
+
+      include: heroInclude,
+    });
+
+    /**
+     * Store version snapshot.
+     */
+    await prisma.heroSlideVersion.create({
+      data: {
+        heroSlideId: slide.id,
+
+        payloadJson: JSON.stringify(dto),
+
+        createdById:
+          actor.id || null,
+      },
+    });
+
+    await AuditService.log({
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+
+      action: "HERO_SLIDE_CREATED",
+
+      entityType: "HeroSlide",
+      entityId: slide.id,
+
+      metadata: {
+        title: slide.title,
+        status: slide.status,
+      },
+    });
+
+    return serializeSlide(slide);
+  }
+
+  /**
+   * Update hero slide.
    */
   static async updateSlide(
     id: string,
-    dto: Partial<CreateHeroSlideDTO> & { slideNumber?: string },
-    actorEmail = 'admin@icchastore.com'
+    dto: Partial<CreateHeroSlideDTO> & {
+      slideNumber?: string;
+    },
+    actor: Actor = {}
   ): Promise<HeroSlide | null> {
-    const index = heroSlidesStore.findIndex((s) => s.id === id);
-    if (index === -1) return null;
-
-    const current = heroSlidesStore[index];
-    const updated: HeroSlide = {
-      ...current,
-      internalName: dto.internalName !== undefined ? dto.internalName : current.internalName,
-      slideNumber: dto.slideNumber !== undefined ? dto.slideNumber : current.slideNumber,
-      navLabel: dto.navLabel !== undefined ? dto.navLabel : current.navLabel,
-      eyebrow: dto.eyebrow !== undefined ? dto.eyebrow : current.eyebrow,
-      title: dto.title !== undefined ? dto.title : current.title,
-      description: dto.description !== undefined ? dto.description : current.description,
-      desktopImage: dto.desktopImage !== undefined ? dto.desktopImage : current.desktopImage,
-      mobileImage: dto.mobileImage !== undefined ? dto.mobileImage : current.mobileImage,
-      imageAlt: dto.imageAlt !== undefined ? dto.imageAlt : current.imageAlt,
-      primaryCTA: {
-        label: dto.primaryCtaLabel !== undefined ? dto.primaryCtaLabel : current.primaryCTA.label,
-        href: dto.primaryCtaUrl !== undefined ? dto.primaryCtaUrl : current.primaryCTA.href,
+    const existing = await prisma.heroSlide.findUnique({
+      where: {
+        id,
       },
-      secondaryCTA: dto.secondaryCtaLabel !== undefined ? (dto.secondaryCtaLabel ? {
-        label: dto.secondaryCtaLabel,
-        href: dto.secondaryCtaUrl || '/register',
-      } : undefined) : current.secondaryCTA,
-      contentPosition: dto.contentPosition !== undefined ? dto.contentPosition : current.contentPosition,
-      textTheme: dto.textTheme !== undefined ? dto.textTheme : current.textTheme,
-      desktopImagePosition: dto.desktopImagePosition !== undefined ? dto.desktopImagePosition : current.desktopImagePosition,
-      mobileImagePosition: dto.mobileImagePosition !== undefined ? dto.mobileImagePosition : current.mobileImagePosition,
-      productId: dto.productId !== undefined ? dto.productId : current.productId,
-      categoryId: dto.categoryId !== undefined ? dto.categoryId : current.categoryId,
-      collectionId: dto.collectionId !== undefined ? dto.collectionId : current.collectionId,
-      fabricTags: dto.fabricTags !== undefined ? dto.fabricTags : current.fabricTags,
-      editorialBadge: dto.editorialBadge !== undefined ? dto.editorialBadge : current.editorialBadge,
-      sortOrder: dto.sortOrder !== undefined ? dto.sortOrder : current.sortOrder,
-      status: dto.status !== undefined ? dto.status : current.status,
-      startAt: dto.startAt !== undefined ? dto.startAt : current.startAt,
-      endAt: dto.endAt !== undefined ? dto.endAt : current.endAt,
-      updatedAt: new Date().toISOString(),
-    };
-
-    heroSlidesStore[index] = updated;
-
-    await AuditService.log({
-      actorEmail,
-      action: 'HERO_SLIDE_UPDATED',
-      entityType: 'HeroSlide',
-      entityId: updated.id,
-      metadata: { fields: Object.keys(dto) },
     });
 
-    HeroService.invalidateCache();
-    return updated;
-  }
+    if (!existing) {
+      return null;
+    }
 
-  /**
-   * Admin: Publish slide
-   */
-  static async publishSlide(id: string, actorEmail = 'admin@icchastore.com'): Promise<HeroSlide | null> {
-    return this.updateSlide(id, { status: 'PUBLISHED' }, actorEmail);
-  }
+    const data: Prisma.HeroSlideUpdateInput = {};
 
-  /**
-   * Admin: Unpublish slide (convert to DRAFT)
-   */
-  static async unpublishSlide(id: string, actorEmail = 'admin@icchastore.com'): Promise<HeroSlide | null> {
-    return this.updateSlide(id, { status: 'DRAFT' }, actorEmail);
-  }
+    if (dto.internalName !== undefined) {
+      data.internalName = dto.internalName;
+    }
 
-  /**
-   * Admin: Archive slide safely
-   */
-  static async archiveSlide(id: string, actorEmail = 'admin@icchastore.com'): Promise<boolean> {
-    const index = heroSlidesStore.findIndex((s) => s.id === id);
-    if (index === -1) return false;
+    if (dto.slideNumber !== undefined) {
+      data.slideNumber = dto.slideNumber;
+    }
 
-    heroSlidesStore[index].status = 'ARCHIVED';
-    heroSlidesStore[index].updatedAt = new Date().toISOString();
+    if (dto.navLabel !== undefined) {
+      data.navLabel = dto.navLabel;
+    }
+
+    if (dto.eyebrow !== undefined) {
+      data.eyebrow = dto.eyebrow;
+    }
+
+    if (dto.title !== undefined) {
+      data.title = dto.title;
+    }
+
+    if (dto.description !== undefined) {
+      data.description = dto.description;
+    }
+
+    if (dto.desktopImage !== undefined) {
+      data.desktopImageUrl = dto.desktopImage;
+    }
+
+    if (dto.mobileImage !== undefined) {
+      data.mobileImageUrl = dto.mobileImage;
+    }
+
+    if (dto.imageAlt !== undefined) {
+      data.imageAlt = dto.imageAlt;
+    }
+
+    if (dto.primaryCtaLabel !== undefined) {
+      data.primaryCtaLabel = dto.primaryCtaLabel;
+    }
+
+    if (dto.primaryCtaUrl !== undefined) {
+      data.primaryCtaUrl = dto.primaryCtaUrl;
+    }
+
+    if (dto.secondaryCtaLabel !== undefined) {
+      data.secondaryCtaLabel =
+        dto.secondaryCtaLabel || null;
+    }
+
+    if (dto.secondaryCtaUrl !== undefined) {
+      data.secondaryCtaUrl =
+        dto.secondaryCtaUrl || null;
+    }
+
+    if (dto.contentPosition !== undefined) {
+      data.contentPosition =
+        dto.contentPosition.toUpperCase() as HeroContentPosition;
+    }
+
+    if (dto.textTheme !== undefined) {
+      data.textTheme =
+        dto.textTheme.toUpperCase() as HeroTextTheme;
+    }
+
+    if (dto.desktopImagePosition !== undefined) {
+      data.desktopImagePosition =
+        dto.desktopImagePosition;
+    }
+
+    if (dto.mobileImagePosition !== undefined) {
+      data.mobileImagePosition =
+        dto.mobileImagePosition;
+    }
+
+    if (dto.productId !== undefined) {
+      data.linkedProduct = dto.productId
+        ? {
+            connect: {
+              id: dto.productId,
+            },
+          }
+        : {
+            disconnect: true,
+          };
+    }
+
+    if (dto.categoryId !== undefined) {
+      data.linkedCategory = dto.categoryId
+        ? {
+            connect: {
+              id: dto.categoryId,
+            },
+          }
+        : {
+            disconnect: true,
+          };
+    }
+
+    if (dto.collectionId !== undefined) {
+      data.linkedCollection = dto.collectionId
+        ? {
+            connect: {
+              id: dto.collectionId,
+            },
+          }
+        : {
+            disconnect: true,
+          };
+    }
+
+    if (dto.fabricTags !== undefined) {
+      data.fabricTagsJson =
+        JSON.stringify(dto.fabricTags);
+    }
+
+    if (dto.editorialBadge !== undefined) {
+      data.editorialBadge =
+        dto.editorialBadge || null;
+    }
+
+    if (dto.sortOrder !== undefined) {
+      data.sortOrder = dto.sortOrder;
+    }
+
+    if (dto.startAt !== undefined) {
+      data.startAt = parseDate(dto.startAt);
+    }
+
+    if (dto.endAt !== undefined) {
+      data.endAt = parseDate(dto.endAt);
+    }
+
+    if (dto.status !== undefined) {
+      data.status =
+        dto.status.toUpperCase() as HeroSlideStatus;
+
+      if (dto.status === "PUBLISHED") {
+        data.publishedAt =
+          existing.publishedAt || new Date();
+      }
+
+      if (
+        dto.status === "DRAFT" ||
+        dto.status === "ARCHIVED"
+      ) {
+        data.publishedAt =
+          existing.publishedAt;
+      }
+    }
+
+    data.updatedBy = actor.id
+      ? {
+          connect: {
+            id: actor.id,
+          },
+        }
+      : undefined;
+
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        const slide = await tx.heroSlide.update({
+          where: {
+            id,
+          },
+
+          data,
+
+          include: heroInclude,
+        });
+
+        await tx.heroSlideVersion.create({
+          data: {
+            heroSlideId: slide.id,
+
+            payloadJson: JSON.stringify(
+              dto
+            ),
+
+            createdById:
+              actor.id || null,
+          },
+        });
+
+        return slide;
+      }
+    );
 
     await AuditService.log({
-      actorEmail,
-      action: 'HERO_SLIDE_ARCHIVED',
-      entityType: 'HeroSlide',
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+
+      action: "HERO_SLIDE_UPDATED",
+
+      entityType: "HeroSlide",
+      entityId: id,
+
+      metadata: {
+        fields: Object.keys(dto),
+      },
+    });
+
+    return serializeSlide(updated);
+  }
+
+  /**
+   * Publish.
+   */
+  static async publishSlide(
+    id: string,
+    actor: Actor = {}
+  ): Promise<HeroSlide | null> {
+    return this.updateSlide(
+      id,
+      {
+        status: "PUBLISHED",
+      },
+      actor
+    );
+  }
+
+  /**
+   * Unpublish.
+   */
+  static async unpublishSlide(
+    id: string,
+    actor: Actor = {}
+  ): Promise<HeroSlide | null> {
+    return this.updateSlide(
+      id,
+      {
+        status: "DRAFT",
+      },
+      actor
+    );
+  }
+
+  /**
+   * Archive.
+   */
+  static async archiveSlide(
+    id: string,
+    actor: Actor = {}
+  ): Promise<boolean> {
+    const existing = await prisma.heroSlide.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!existing) {
+      return false;
+    }
+
+    await prisma.heroSlide.update({
+      where: {
+        id,
+      },
+
+      data: {
+        status: HeroSlideStatus.ARCHIVED,
+
+        updatedBy: actor.id
+          ? {
+              connect: {
+                id: actor.id,
+              },
+            }
+          : undefined,
+      },
+    });
+
+    await AuditService.log({
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+
+      action: "HERO_SLIDE_ARCHIVED",
+
+      entityType: "HeroSlide",
       entityId: id,
     });
 
-    HeroService.invalidateCache();
     return true;
   }
 
   /**
-   * Admin: Duplicate slide for quick campaign iteration
+   * Duplicate slide as DRAFT.
    */
-  static async duplicateSlide(id: string, actorEmail = 'admin@icchastore.com'): Promise<HeroSlide | null> {
-    const original = await this.getSlideById(id);
-    if (!original) return null;
+  static async duplicateSlide(
+    id: string,
+    actor: Actor = {}
+  ): Promise<HeroSlide | null> {
+    const original =
+      await prisma.heroSlide.findUnique({
+        where: {
+          id,
+        },
 
-    const duplicated = await this.createSlide({
-      internalName: `${original.internalName || 'Slide'} (Copy)`,
-      eyebrow: original.eyebrow,
-      title: original.title,
-      description: original.description,
-      desktopImage: original.desktopImage,
-      mobileImage: original.mobileImage,
-      imageAlt: original.imageAlt,
-      primaryCtaLabel: original.primaryCTA.label,
-      primaryCtaUrl: original.primaryCTA.href,
-      secondaryCtaLabel: original.secondaryCTA?.label,
-      secondaryCtaUrl: original.secondaryCTA?.href,
-      contentPosition: original.contentPosition,
-      textTheme: original.textTheme,
-      desktopImagePosition: original.desktopImagePosition,
-      mobileImagePosition: original.mobileImagePosition,
-      productId: original.productId,
-      categoryId: original.categoryId,
-      collectionId: original.collectionId,
-      fabricTags: original.fabricTags,
-      editorialBadge: original.editorialBadge,
-      navLabel: `${original.navLabel} Copy`,
-      status: 'DRAFT',
-    }, actorEmail);
+        include: heroInclude,
+      });
 
-    return duplicated;
-  }
-
-  /**
-   * Admin: Transactionally reorder hero slides
-   */
-  static async reorderSlides(
-    reordered: { id: string; sortOrder: number }[],
-    actorEmail = 'admin@icchastore.com'
-  ): Promise<HeroSlide[]> {
-    for (const item of reordered) {
-      const slide = heroSlidesStore.find((s) => s.id === item.id);
-      if (slide) {
-        slide.sortOrder = item.sortOrder;
-        slide.slideNumber = String(item.sortOrder).padStart(2, '0');
-        slide.updatedAt = new Date().toISOString();
-      }
+    if (!original) {
+      return null;
     }
 
-    heroSlidesStore.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const lastSlide =
+      await prisma.heroSlide.findFirst({
+        orderBy: {
+          sortOrder: "desc",
+        },
 
-    await AuditService.log({
-      actorEmail,
-      action: 'HERO_SLIDES_REORDERED',
-      entityType: 'HeroSlide',
-      entityId: 'batch',
-      metadata: { count: reordered.length },
+        select: {
+          sortOrder: true,
+        },
+      });
+
+    const nextOrder =
+      (lastSlide?.sortOrder || 0) + 1;
+
+    const duplicated =
+      await prisma.heroSlide.create({
+        data: {
+          internalName: `${original.internalName} (Copy)`,
+
+          slideNumber:
+            String(nextOrder).padStart(2, "0"),
+
+          navLabel:
+            `${original.navLabel} Copy`,
+
+          eyebrow: original.eyebrow,
+          title: original.title,
+          description: original.description,
+
+          desktopAssetId:
+            original.desktopAssetId,
+
+          mobileAssetId:
+            original.mobileAssetId,
+
+          desktopImageUrl:
+            original.desktopImageUrl,
+
+          mobileImageUrl:
+            original.mobileImageUrl,
+
+          imageAlt:
+            original.imageAlt,
+
+          primaryCtaLabel:
+            original.primaryCtaLabel,
+
+          primaryCtaUrl:
+            original.primaryCtaUrl,
+
+          secondaryCtaLabel:
+            original.secondaryCtaLabel,
+
+          secondaryCtaUrl:
+            original.secondaryCtaUrl,
+
+          contentPosition:
+            original.contentPosition,
+
+          textTheme:
+            original.textTheme,
+
+          desktopImagePosition:
+            original.desktopImagePosition,
+
+          mobileImagePosition:
+            original.mobileImagePosition,
+
+          linkedProductId:
+            original.linkedProductId,
+
+          linkedCategoryId:
+            original.linkedCategoryId,
+
+          linkedCollectionId:
+            original.linkedCollectionId,
+
+          fabricTagsJson:
+            original.fabricTagsJson,
+
+          editorialBadge:
+            original.editorialBadge,
+
+          sortOrder: nextOrder,
+
+          status: HeroSlideStatus.DRAFT,
+
+          startAt: null,
+          endAt: null,
+          publishedAt: null,
+
+          createdById:
+            actor.id || null,
+
+          updatedById:
+            actor.id || null,
+        },
+
+        include: heroInclude,
+      });
+
+    await prisma.heroSlideVersion.create({
+      data: {
+        heroSlideId: duplicated.id,
+
+        payloadJson: JSON.stringify({
+          duplicatedFrom: original.id,
+        }),
+
+        createdById:
+          actor.id || null,
+      },
     });
 
-    HeroService.invalidateCache();
-    return [...heroSlidesStore];
+    await AuditService.log({
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+
+      action: "HERO_SLIDE_CREATED",
+
+      entityType: "HeroSlide",
+      entityId: duplicated.id,
+
+      metadata: {
+        duplicatedFrom: original.id,
+      },
+    });
+
+    return serializeSlide(duplicated);
   }
 
   /**
-   * Next.js cache invalidation helper
+   * Reorder slides transactionally.
    */
-  static invalidateCache(): void {
-    if (typeof window === 'undefined') {
-      try {
-        // Dynamic import to prevent client webpack bundling errors
-        import('next/cache').then(({ revalidatePath, revalidateTag }) => {
-          revalidateTag('homepage-hero');
-          revalidatePath('/');
-        }).catch(() => {});
-      } catch {
-        // Non-blocking in dev / test runtime
-      }
-    }
+  static async reorderSlides(
+    reordered: {
+      id: string;
+      sortOrder: number;
+    }[],
+    actor: Actor = {}
+  ): Promise<HeroSlide[]> {
+    const result =
+      await prisma.$transaction(
+        async (tx) => {
+          for (const item of reordered) {
+            await tx.heroSlide.update({
+              where: {
+                id: item.id,
+              },
+
+              data: {
+                sortOrder:
+                  item.sortOrder,
+
+                updatedBy: actor.id
+                  ? {
+                      connect: {
+                        id: actor.id,
+                      },
+                    }
+                  : undefined,
+              },
+            });
+          }
+
+          return tx.heroSlide.findMany({
+            include: heroInclude,
+
+            orderBy: {
+              sortOrder: "asc",
+            },
+          });
+        }
+      );
+
+    await AuditService.log({
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+
+      action: "HERO_SLIDE_UPDATED",
+
+      entityType: "HeroSlide",
+      entityId: "bulk-reorder",
+
+      metadata: {
+        slides: reordered,
+      },
+    });
+
+    return result.map(serializeSlide);
+  }
+
+  /**
+   * Save hero slider configuration.
+   */
+  static async updateHeroConfig(
+    config: Partial<HeroSliderConfig>
+  ): Promise<HeroSliderConfig> {
+    const current =
+      await this.getHeroConfig();
+
+    const updated = {
+      ...current,
+      ...config,
+    };
+
+    await prisma.siteSetting.upsert({
+      where: {
+        key: "hero_slider_config",
+      },
+
+      create: {
+        key: "hero_slider_config",
+
+        value: JSON.stringify(updated),
+
+        description:
+          "Homepage hero slider configuration",
+      },
+
+      update: {
+        value: JSON.stringify(updated),
+      },
+    });
+
+    return updated;
   }
 }

@@ -97,6 +97,17 @@ export async function GET(
             imageUrl: true,
             color: true,
             sizeCombination: true,
+            product: {
+              select: {
+                vendor: {
+                  select: {
+                    id: true,
+                    businessName: true,
+                    contactName: true,
+                  },
+                },
+              },
+            },
           },
         },
 
@@ -139,7 +150,6 @@ export async function GET(
                 ifsc: true,
                 branch: true,
                 upiId: true,
-                estimatePrefix: true,
                 invoicePrefix: true,
                 defaultGstRate: true,
                 isActive: true,
@@ -159,6 +169,20 @@ export async function GET(
             createdAt: true,
           },
         },
+
+        // Vendor-specific order statuses.
+        // These are read-only for the retailer.
+        sellerOrders: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            vendorId: true,
+            sellerName: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
@@ -168,6 +192,31 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    // Resolve vendors explicitly from the ordered products. This keeps vendor
+    // ownership independent from the billing entity and avoids relying on the
+    // billing-entity grouping in the UI.
+    const productIds = Array.from(
+      new Set(order.items.map((item) => item.productId))
+    );
+
+    const vendorProducts = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: {
+        id: true,
+        vendor: {
+          select: {
+            id: true,
+            businessName: true,
+            contactName: true,
+          },
+        },
+      },
+    });
+
+    const vendorByProductId = new Map(
+      vendorProducts.map((product) => [product.id, product.vendor])
+    );
 
     const data = {
       id: order.id,
@@ -204,6 +253,10 @@ export async function GET(
         gstRate: toNumber(item.gstRate),
         gstAmount: toNumber(item.gstAmount),
         totalWithGst: toNumber(item.totalWithGst),
+        vendor:
+          vendorByProductId.get(item.productId) ??
+          item.product?.vendor ??
+          null,
       })),
 
       estimates: order.estimates.map((estimate) => ({
@@ -236,6 +289,17 @@ export async function GET(
         actorName: entry.actorName,
         notes: entry.notes,
         timestamp: entry.createdAt.toISOString(),
+      })),
+
+      // Each vendor's status is independent inside the master order.
+      // Retailers can see these statuses but cannot modify them.
+      sellerOrders: order.sellerOrders.map((sellerOrder) => ({
+        id: sellerOrder.id,
+        vendorId: sellerOrder.vendorId,
+        sellerName: sellerOrder.sellerName,
+        status: normalizeStatus(sellerOrder.status),
+        createdAt: sellerOrder.createdAt.toISOString(),
+        updatedAt: sellerOrder.updatedAt.toISOString(),
       })),
     };
 

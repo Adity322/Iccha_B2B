@@ -57,7 +57,7 @@ function serializeItem(item: any) {
   };
 }
 
-function serializeOrder(order: any, items: any[], staff: boolean) {
+function serializeOrder(order: any, items: any[], scoped: boolean) {
   const visibleItems = items.map(serializeItem);
   const subtotal = visibleItems.reduce((s, i) => s + i.lineSubtotal, 0);
   const gst = visibleItems.reduce((s, i) => s + i.gstAmount, 0);
@@ -78,13 +78,13 @@ function serializeOrder(order: any, items: any[], staff: boolean) {
     status: order.status,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
-    totalDesigns: staff ? order.totalDesigns : designs,
-    totalSets: staff ? order.totalSets : sets,
-    totalPieces: staff ? order.totalPieces : pieces,
-    subtotal: staff ? Number(order.subtotal) : subtotal,
-    totalGst: staff ? Number(order.totalGst) : gst,
-    shipping: staff ? Number(order.shipping) : 0,
-    masterTotal: staff ? Number(order.masterTotal) : total,
+    totalDesigns: scoped ? designs : order.totalDesigns,
+    totalSets: scoped ? sets : order.totalSets,
+    totalPieces: scoped ? pieces : order.totalPieces,
+    subtotal: scoped ? subtotal : Number(order.subtotal),
+    totalGst: scoped ? gst : Number(order.totalGst),
+    shipping: scoped ? 0 : Number(order.shipping),
+    masterTotal: scoped ? total : Number(order.masterTotal),
     items: visibleItems,
   };
 }
@@ -93,7 +93,10 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await getAuth(request);
     if ("error" in auth) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: auth.status }
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -105,7 +108,6 @@ export async function GET(request: NextRequest) {
     let house = false;
 
     if (auth.kind === "vendor") {
-      // A vendor request can NEVER override this with another vendorId.
       vendorId = auth.vendorProfile.id;
     } else if (view === "vendor") {
       if (!requestedVendorId) {
@@ -173,7 +175,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: orders.map(o => serializeOrder(o, o.items, auth.kind === "staff")),
+      data: orders.map(o =>
+        serializeOrder(
+          o,
+          o.items,
+          Boolean(vendorId)
+        )
+      ),
       scope: auth.kind === "vendor" ? "vendor" : house ? "house" : "vendor",
       vendorId,
     });

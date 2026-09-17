@@ -19,14 +19,35 @@ export async function GET(
   try {
     const auth = await getAuth(request);
     if ("error" in auth) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: auth.status }
+      );
     }
 
     const { orderId } = await params;
+    const { searchParams } = new URL(request.url);
+    const requestedVendorId = searchParams.get("vendorId");
+
+    // Staff may inspect one selected vendor's portion of a master order.
+    // Vendors can NEVER override their own vendor scope.
+    const vendorId =
+      auth.kind === "vendor"
+        ? auth.vendorProfile.id
+        : requestedVendorId?.trim() || null;
 
     const order = await prisma.orderEnquiry.findFirst({
       where: {
         OR: [{ id: orderId }, { orderNumber: orderId }],
+        ...(vendorId
+          ? {
+              items: {
+                some: {
+                  product: { vendorId },
+                },
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -50,6 +71,9 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         items: {
+          where: vendorId
+            ? { product: { vendorId } }
+            : undefined,
           orderBy: { id: "asc" },
           select: {
             id: true,
@@ -76,9 +100,20 @@ export async function GET(
               select: {
                 id: true,
                 vendorId: true,
-                vendor: { select: { id: true, businessName: true } },
+                vendor: {
+                  select: {
+                    id: true,
+                    businessName: true,
+                    contactName: true,
+                  },
+                },
                 warehouse: {
-                  select: { id: true, name: true, city: true, state: true },
+                  select: {
+                    id: true,
+                    name: true,
+                    city: true,
+                    state: true,
+                  },
                 },
               },
             },
@@ -98,22 +133,20 @@ export async function GET(
     });
 
     if (!order) {
-      return NextResponse.json({ success: false, error: "Order not found." }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Order not found." },
+        { status: 404 }
+      );
     }
 
-    const visibleItems =
-      auth.kind === "vendor"
-        ? order.items.filter(i => i.product.vendorId === auth.vendorProfile.id)
-        : order.items;
-
-    if (auth.kind === "vendor" && visibleItems.length === 0) {
+    if (vendorId && order.items.length === 0) {
       return NextResponse.json(
-        { success: false, error: "You are not allowed to view this order." },
+        { success: false, error: "No products from this vendor are in the order." },
         { status: 403 }
       );
     }
 
-    const items = visibleItems.map(item => ({
+    const items = order.items.map(item => ({
       ...item,
       pieceRate: Number(item.pieceRate),
       setRate: Number(item.setRate),
@@ -123,6 +156,7 @@ export async function GET(
       totalWithGst: Number(item.totalWithGst),
     }));
 
+    const isScoped = Boolean(vendorId);
     const subtotal = items.reduce((s, i) => s + i.lineSubtotal, 0);
     const gst = items.reduce((s, i) => s + i.gstAmount, 0);
     const total = items.reduce((s, i) => s + i.totalWithGst, 0);
@@ -134,18 +168,22 @@ export async function GET(
       success: true,
       data: {
         ...order,
-        totalDesigns: auth.kind === "staff" ? order.totalDesigns : designs,
-        totalSets: auth.kind === "staff" ? order.totalSets : sets,
-        totalPieces: auth.kind === "staff" ? order.totalPieces : pieces,
-        subtotal: auth.kind === "staff" ? Number(order.subtotal) : subtotal,
-        totalGst: auth.kind === "staff" ? Number(order.totalGst) : gst,
-        shipping: auth.kind === "staff" ? Number(order.shipping) : 0,
-        masterTotal: auth.kind === "staff" ? Number(order.masterTotal) : total,
+        totalDesigns: isScoped ? designs : order.totalDesigns,
+        totalSets: isScoped ? sets : order.totalSets,
+        totalPieces: isScoped ? pieces : order.totalPieces,
+        subtotal: isScoped ? subtotal : Number(order.subtotal),
+        totalGst: isScoped ? gst : Number(order.totalGst),
+        shipping: isScoped ? 0 : Number(order.shipping),
+        masterTotal: isScoped ? total : Number(order.masterTotal),
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString(),
         items,
-        history: order.history.map(h => ({ ...h, createdAt: h.createdAt.toISOString() })),
-        scope: auth.kind === "vendor" ? "vendor" : "admin",
+        history: order.history.map(h => ({
+          ...h,
+          createdAt: h.createdAt.toISOString(),
+        })),
+        scope: isScoped ? "vendor" : "admin",
+        vendorId,
       },
     });
   } catch (error) {

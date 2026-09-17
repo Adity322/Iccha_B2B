@@ -1,38 +1,83 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { HeroService } from '@/lib/services/heroService';
+import { NextRequest, NextResponse } from "next/server";
+
+import { HeroService } from "@/lib/services/heroService";
+import { requireStaff } from "@/lib/auth/guard";
 
 export async function POST(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{ id: string }>;
+  }
 ) {
-  try {
-    const { id } = await params;
-    const published = await HeroService.publishSlide(id);
+  const auth =
+    await requireStaff(request);
 
-    if (!published) {
+  if ("error" in auth) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: auth.error,
+      },
+      {
+        status: auth.status,
+      }
+    );
+  }
+
+  const { id } = await params;
+
+  try {
+    const slide =
+      await HeroService.publishSlide(
+        id,
+        {
+          id: auth.user.id,
+          email: auth.user.email,
+          role: auth.user.role,
+        }
+      );
+
+    if (!slide) {
       return NextResponse.json(
         {
           success: false,
-          data: null,
-          error: { code: 'HERO_SLIDE_NOT_FOUND', message: `Slide with ID ${id} not found` },
+          error: {
+            code: "HERO_SLIDE_NOT_FOUND",
+            message:
+              "Hero slide not found",
+          },
         },
-        { status: 404 }
+        {
+          status: 404,
+        }
       );
     }
 
     return NextResponse.json({
       success: true,
-      data: published,
+      data: slide,
       error: null,
     });
   } catch (error) {
+    console.error(
+      "Hero publish error:",
+      error
+    );
+
     return NextResponse.json(
       {
         success: false,
-        data: null,
-        error: { code: 'HERO_PUBLISH_FAILED', message: 'Failed to publish slide' },
+        error: {
+          code: "HERO_PUBLISH_FAILED",
+          message:
+            "Failed to publish hero slide",
+        },
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

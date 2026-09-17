@@ -1,26 +1,58 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { HeroService } from '@/lib/services/heroService';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+import { HeroService } from "@/lib/services/heroService";
+import { requireStaff } from "@/lib/auth/guard";
 
 const reorderSchema = z.object({
-  slides: z.array(
-    z.object({
-      id: z.string(),
-      sortOrder: z.number().int().positive(),
-    })
-  ).min(1),
+  slides: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        sortOrder: z.number().int().positive(),
+      })
+    )
+    .min(1),
 });
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const validated = reorderSchema.parse(body);
+export async function POST(
+  request: NextRequest
+) {
+  const auth =
+    await requireStaff(request);
 
-    const reordered = await HeroService.reorderSlides(validated.slides);
+  if ("error" in auth) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: auth.error,
+      },
+      {
+        status: auth.status,
+      }
+    );
+  }
+
+  try {
+    const body =
+      await request.json();
+
+    const validated =
+      reorderSchema.parse(body);
+
+    const slides =
+      await HeroService.reorderSlides(
+        validated.slides,
+        {
+          id: auth.user.id,
+          email: auth.user.email,
+          role: auth.user.role,
+        }
+      );
 
     return NextResponse.json({
       success: true,
-      data: reordered,
+      data: slides,
       error: null,
     });
   } catch (error) {
@@ -28,20 +60,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          data: null,
-          error: { code: 'VALIDATION_ERROR', message: 'Invalid reorder array', details: error.issues },
+          error: {
+            code: "VALIDATION_ERROR",
+            message:
+              "Invalid reorder payload",
+            details: error.issues,
+          },
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
+
+    console.error(
+      "Hero reorder error:",
+      error
+    );
 
     return NextResponse.json(
       {
         success: false,
-        data: null,
-        error: { code: 'HERO_REORDER_FAILED', message: 'Failed to reorder hero slides' },
+        error: {
+          code: "HERO_REORDER_FAILED",
+          message:
+            "Failed to reorder hero slides",
+        },
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

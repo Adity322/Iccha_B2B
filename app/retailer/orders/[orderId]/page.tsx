@@ -42,7 +42,22 @@ type OrderDetail = {
   internalNotes: string | null;
   createdAt: string;
   updatedAt: string;
-  items: any[];
+  items: {
+    id: string;
+    productName: string;
+    sku: string;
+    sizeCombination: string;
+    sets: number;
+    setRate: number;
+    lineSubtotal: number;
+    billingEntityId: string;
+    imageUrl: string | null;
+    vendor?: {
+      id: string;
+      businessName: string;
+      contactName: string;
+    } | null;
+  }[];
   estimates: any[];
   timeline: {
     id: string;
@@ -51,6 +66,14 @@ type OrderDetail = {
     actorName: string;
     notes: string | null;
     timestamp: string;
+  }[];
+  sellerOrders: {
+    id: string;
+    vendorId: string | null;
+    sellerName: string;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
   }[];
 };
 
@@ -94,6 +117,25 @@ const ROADMAP = [
 
 function formatStatus(status: string) {
   return status.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getSellerStatusClass(status: string) {
+  switch (status.toLowerCase()) {
+    case "completed":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "cancelled":
+      return "bg-red-50 text-red-700 border-red-200";
+    case "processing":
+    case "ready_for_dispatch":
+    case "dispatched":
+      return "bg-blue-50 text-blue-700 border-blue-200";
+    case "confirmed":
+    case "awaiting_payment":
+    case "estimate_generated":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    default:
+      return "bg-rose-50 text-[#831843] border-rose-200";
+  }
 }
 
 function formatDate(value: string) {
@@ -310,6 +352,50 @@ export default function RetailerOrderDetailPage() {
             </div>
           </div>
 
+          {/* Vendor-specific order statuses */}
+          <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-5">
+            <div>
+              <h3 className="font-serif text-base font-bold text-stone-900">
+                Vendor Order Status
+              </h3>
+              <p className="text-[11px] text-stone-500 mt-1">
+                Each vendor manages the status of their own products in this master order.
+              </p>
+            </div>
+
+            {order.sellerOrders?.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {order.sellerOrders.map((sellerOrder) => (
+                  <div
+                    key={sellerOrder.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50 p-4 flex items-center justify-between gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-stone-900 truncate">
+                        {sellerOrder.sellerName}
+                      </div>
+                      <div className="text-[10px] text-stone-500 mt-1">
+                        Last updated {formatDate(sellerOrder.updatedAt)}
+                      </div>
+                    </div>
+
+                    <span
+                      className={`shrink-0 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase ${getSellerStatusClass(
+                        sellerOrder.status
+                      )}`}
+                    >
+                      {formatStatus(sellerOrder.status)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-stone-500 bg-stone-50 rounded-2xl p-4 border border-stone-200">
+                Vendor-specific status is not available for this order yet.
+              </div>
+            )}
+          </div>
+
           {/* Roadmap */}
           <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-4">
             <h3 className="font-serif text-base font-bold text-stone-900">
@@ -350,7 +436,30 @@ export default function RetailerOrderDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             <div className="lg:col-span-8 space-y-6">
               {(order.estimates || []).map((estimate) => {
-                const isSurat = estimate.billingEntity?.id === "entity_a";
+                const isSurat = estimate.billingEntity?.code === "entity_a";
+
+                const estimateItems = order.items.filter(
+                  (item) => item.billingEntityId === estimate.billingEntityId
+                );
+
+                // Vendor ownership comes from the ordered Product, not the billing entity.
+                // Use the estimate's items first. If an older order has an inconsistent
+                // billingEntityId on an OrderItem, fall back to the vendors actually
+                // attached to this order so the retailer still sees the real vendor.
+                const vendorSource = estimateItems.length > 0 ? estimateItems : order.items;
+
+                const vendors = Array.from(
+                  new Map(
+                    vendorSource
+                      .filter((item) => item.vendor?.businessName)
+                      .map((item) => [item.vendor!.id, item.vendor!])
+                  ).values()
+                );
+
+                const billingEntityName =
+                  estimate.billingEntity?.tradeName ||
+                  estimate.billingEntity?.legalName ||
+                  "Billing Entity";
 
                 return (
                   <div
@@ -369,20 +478,50 @@ export default function RetailerOrderDetailPage() {
 
                         <div>
                           <h3 className="font-serif text-lg font-bold text-stone-900">
-                            {isSurat
-                              ? "Surat Manufacturing Hub (Entity A)"
-                              : "Jaipur Handblock Hub (Entity B)"}
+                            {billingEntityName}
+                            <span className="ml-2 text-xs font-sans font-semibold text-stone-400">
+                              ({isSurat ? "Entity A" : "Entity B"})
+                            </span>
                           </h3>
 
-                          <div className="text-xs text-stone-500">
-                            Legal Name:{" "}
-                            <strong>
-                              {estimate.billingEntity?.legalName}
-                            </strong>{" "}
-                            • GSTIN:{" "}
-                            <span className="font-mono font-bold text-stone-800">
-                              {estimate.billingEntity?.gstin}
-                            </span>
+                          <div className="mt-2 space-y-2 text-xs text-stone-600">
+                            <div>
+                              <span className="font-semibold text-stone-500">
+                                Vendor{vendors.length > 1 ? "s" : ""}:
+                              </span>
+                              <div className="mt-0.5 font-bold text-stone-900">
+                                {vendors.length > 0
+                                  ? vendors.map((vendor) => (
+                                      <div key={vendor.id}>
+                                        {vendor.businessName}
+                                        {vendor.contactName ? (
+                                          <span className="ml-1 font-normal text-stone-500">
+                                            • {vendor.contactName}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    ))
+                                  : "Vendor information unavailable"}
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="font-semibold text-stone-500">
+                                Billing Entity:
+                              </span>{" "}
+                              <strong className="text-stone-900">
+                                {estimate.billingEntity?.legalName || "Not configured"}
+                              </strong>
+                              {estimate.billingEntity?.gstin ? (
+                                <>
+                                  {" • "}
+                                  GSTIN:{" "}
+                                  <span className="font-mono font-bold text-stone-800">
+                                    {estimate.billingEntity.gstin}
+                                  </span>
+                                </>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -402,12 +541,7 @@ export default function RetailerOrderDetailPage() {
                         Allocated Wholesale Lots
                       </h4>
 
-                      {order.items
-                        .filter(
-                          (item) =>
-                            item.billingEntityId === estimate.billingEntityId
-                        )
-                        .map((item) => (
+                      {estimateItems.map((item) => (
                           <div
                             key={item.id}
                             className="p-3 bg-stone-50 rounded-2xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"

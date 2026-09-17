@@ -230,6 +230,7 @@ export async function POST(request: NextRequest) {
               product: {
                 include: {
                   category: { select: { id: true, name: true, requiresSize: true } },
+                  vendor: { select: { id: true, businessName: true } },
                   gstConfig: {
                     include: { billingEntity: true },
                   },
@@ -383,6 +384,60 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Create one seller-level order for each owner in the master order.
+      // vendorId !== null  -> vendor-owned products
+      // vendorId === null  -> IcchaStore/Admin-owned products
+      const sellerOrderByOwner = new Map<string, string>();
+
+      const sellerGroups = new Map<
+        string,
+        {
+          vendorId: string | null;
+          sellerName: string;
+          items: typeof cart.items;
+        }
+      >();
+
+      for (const item of cart.items) {
+        const vendorId = item.product.vendorId;
+        const ownerKey = vendorId ?? "ICCHASTORE";
+        const sellerName = item.product.vendor?.businessName ?? "IcchaStore";
+        const existing = sellerGroups.get(ownerKey);
+
+        if (existing) {
+          existing.items.push(item);
+        } else {
+          sellerGroups.set(ownerKey, {
+            vendorId,
+            sellerName,
+            items: [item],
+          });
+        }
+      }
+
+      for (const group of sellerGroups.values()) {
+        const sellerOrder = await tx.sellerOrder.create({
+          data: {
+            orderEnquiryId: order.id,
+            vendorId: group.vendorId,
+            sellerName: group.sellerName,
+            status: "ENQUIRY_RECEIVED",
+          },
+        });
+
+        sellerOrderByOwner.set(group.vendorId ?? "ICCHASTORE", sellerOrder.id);
+
+        await tx.sellerOrderStatusHistory.create({
+          data: {
+            sellerOrderId: sellerOrder.id,
+            status: "ENQUIRY_RECEIVED",
+            actorUserId: guard.retailerProfile.userId,
+            actorName: retailer.applicantName,
+            notes: `Seller order created from master order ${order.orderNumber}.`,
+          },
+        });
+      }
+
       for (const item of cart.items) {
         const product = item.product;
         const entity = product.gstConfig!.billingEntity;
@@ -454,6 +509,7 @@ export async function POST(request: NextRequest) {
         await tx.orderItem.create({
           data: {
             orderEnquiryId: order.id,
+            sellerOrderId: sellerOrderByOwner.get(product.vendorId ?? "ICCHASTORE") ?? null,
             productId: product.id,
             billingEntityId: entity.id,
             productName: product.name,
@@ -528,6 +584,14 @@ export async function POST(request: NextRequest) {
         where: { id: order.id },
         include: {
           items: true,
+          sellerOrders: {
+            select: {
+              id: true,
+              vendorId: true,
+              sellerName: true,
+              status: true,
+            },
+          },
           estimates: {
             select: {
               id: true,
@@ -557,6 +621,7 @@ export async function POST(request: NextRequest) {
           masterTotal: Number(result!.masterTotal),
           totalGst: Number(result!.totalGst),
           shipping: Number(result!.shipping),
+          sellerOrders: result!.sellerOrders,
           estimates: result!.estimates.map((estimate) => ({
             ...estimate,
             grandTotal: Number(estimate.grandTotal),
