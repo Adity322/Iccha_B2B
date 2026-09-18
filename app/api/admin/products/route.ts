@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireStaff, requireVendor } from "@/lib/auth/guard";
 import { resolveGstConfigId } from "@/lib/gst-config";
+import { resolveProductBillingEntityId } from "@/lib/billing/entityResolver";
 
 const PAGE_SIZE = 20;
 const MIN_STOCK_SETS = 5;
@@ -37,7 +38,9 @@ const productFieldsSchema = z.object({
     style: z.string(),
     clothingType: z.string(),
     hsnCode: z.string(),
-    billingEntityId: z.string().uuid("Billing entity is required"),
+    // Billing entity is resolved server-side from the product owner.
+    // Vendor products use the vendor's GST/billing details; house products use the platform entity.
+    billingEntityId: z.string().uuid().optional(),
     mediaAssetIds: z.array(z.string()).optional(),
     vendorId: z.string().optional(),
     warehouseId: z.string().optional(),
@@ -275,8 +278,9 @@ export async function POST(request: NextRequest) {
             ? sizeStocks.reduce((sum, row) => sum + row.availableSets, 0)
             : data.availableSets;
         const totalAvailablePieces = totalAvailableSets * data.piecesPerSet;
+        const billingEntityId = await resolveProductBillingEntityId(vendorId);
         const gstConfigId = await resolveGstConfigId(
-            data.billingEntityId,
+            billingEntityId,
             data.hsnCode
         );
         const product = await prisma.product.create({
@@ -481,8 +485,9 @@ export async function PATCH(request: NextRequest) {
             ? sizeStocks.reduce((sum, row) => sum + row.availableSets, 0)
             : data.availableSets;
         const totalAvailablePieces = totalAvailableSets * data.piecesPerSet;
+        const billingEntityId = await resolveProductBillingEntityId(vendorId);
         const gstConfigId = await resolveGstConfigId(
-            data.billingEntityId,
+            billingEntityId,
             data.hsnCode
         );
         const product = await prisma.product.update({

@@ -14,6 +14,11 @@ const registerSchema = z.object({
   gstin: z.string().optional(),
   pan: z.string().optional(),
   businessType: z.string().default("boutique"),
+  street: z.string().min(1, "Address is required"),
+  city: z.string().min(1, "City is required"),
+  state: z.string().min(1, "State is required"),
+  stateCode: z.string().min(1, "State code is required"),
+  pincode: z.string().min(1, "Pincode is required"),
 }).superRefine((data, ctx) => {
   if (data.accountType === "retailer" && !data.gstin) {
     ctx.addIssue({
@@ -67,6 +72,17 @@ export async function POST(request: NextRequest) {
             gstin: data.accountType === "retailer" ? data.gstin : null,
             pan: data.pan || null,
             businessType: data.accountType === "drop_shipper" ? "drop_shipper" : data.businessType,
+            addresses: {
+              create: {
+                type: "billing",
+                street: data.street,
+                city: data.city,
+                state: data.state,
+                stateCode: data.stateCode,
+                pincode: data.pincode,
+                isDefault: true,
+              },
+            },
             kycApplications: {
               create: {
                 gstin: data.gstin || null,

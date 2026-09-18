@@ -16,20 +16,24 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.trim();
 
     const vendors = await prisma.vendorProfile.findMany({
-      where: search
-        ? {
-            OR: [
+      where: {
+        user: { role: "VENDOR" },
+        ...(search
+          ? {
+              OR: [
               { businessName: { contains: search, mode: "insensitive" } },
               { contactName: { contains: search, mode: "insensitive" } },
               { gstin: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : undefined,
+              ],
+            }
+          : {}),
+      },
       orderBy: { businessName: "asc" },
       take: PAGE_SIZE + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
+        userId: true,
         businessName: true,
         contactName: true,
         mobile: true,

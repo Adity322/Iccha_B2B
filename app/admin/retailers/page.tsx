@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { 
   Search, 
-  Sliders, 
+  Sliders,
+  Trash2, 
 } from 'lucide-react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { useApp } from '@/lib/context/AppContext';
@@ -21,6 +22,7 @@ interface Retailer {
   state: string | null;
   moqOverride: boolean;
   customMoqSets: number | null;
+  isActive: boolean;
 }
 
 export default function AdminRetailersPage() {
@@ -30,36 +32,82 @@ export default function AdminRetailersPage() {
   const [search, setSearch] = useState('');
   const [selectedRetailer, setSelectedRetailer] = useState<Retailer | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchRetailers = async () => {
-    setLoading(true);
-    const res = await fetch('/api/admin/retailers');
-    const result = await res.json();
-    if (res.ok && result.success) {
-      setRetailers(result.data);
-    } else {
-      addToast({ type: 'error', title: 'Failed to load retailers', message: result.error || '' });
+  const fetchRetailers = async (cursor?: string | null, query = search) => {
+    if (cursor) setLoadingMore(true);
+    else setLoading(true);
+
+    try {
+      const params = new URLSearchParams();
+      if (cursor) params.set('cursor', cursor);
+      if (query.trim()) params.set('search', query.trim());
+
+      const res = await fetch(`/api/admin/retailers?${params.toString()}`);
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setRetailers(prev => cursor ? [...prev, ...result.data] : result.data);
+        setNextCursor(result.nextCursor);
+      } else {
+        addToast({ type: 'error', title: 'Failed to load retailers', message: result.error || '' });
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-    setLoading(false);
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => fetchRetailers(null, search), 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && nextCursor && !loadingMore) {
+          fetchRetailers(nextCursor);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextCursor, loadingMore]);
 
   useEffect(() => {
     fetchRetailers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredRetailers = retailers.filter(r => {
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        r.businessName.toLowerCase().includes(q) ||
-        r.applicantName.toLowerCase().includes(q) ||
-        (r.gstin || '').toLowerCase().includes(q) ||
-        r.mobile.includes(q)
-      );
+  const handleDelete = async (retailer: Retailer) => {
+    if (!window.confirm(`Delete ${retailer.businessName}? This cannot be undone.`)) return;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/retailers/${retailer.id}`, { method: 'DELETE' });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        addToast({ type: 'error', title: 'Delete failed', message: result.error || 'Please try again.' });
+        return;
+      }
+
+      setRetailers(prev => prev.filter(r => r.id !== retailer.id));
+      addToast({ type: 'success', title: 'Retailer deleted', message: `${retailer.businessName} was deleted.` });
+    } catch (err) {
+      console.error(err);
+      addToast({ type: 'error', title: 'Delete failed', message: 'Something went wrong.' });
+    } finally {
+      setSubmitting(false);
     }
-    return true;
-  });
+  };
 
   const handleSetMOQ = async (retailer: Retailer, permittedMinSets: number | null) => {
     setSubmitting(true);
@@ -130,81 +178,92 @@ export default function AdminRetailersPage() {
           <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
             Loading retailer accounts...
           </div>
-        ) : filteredRetailers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredRetailers.map((ret) => (
-              <div
-                key={ret.id}
-                className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm hover:shadow-md transition space-y-4 text-xs flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl bg-rose-50 text-[#831843] flex items-center justify-center font-bold font-serif text-lg">
-                        {ret.businessName.charAt(0)}
+        ) : retailers.length > 0 ? (
+          <><div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {retailers.map((ret) => (
+                <div
+                  key={ret.id}
+                  className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm hover:shadow-md transition space-y-4 text-xs flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-xl bg-rose-50 text-[#831843] flex items-center justify-center font-bold font-serif text-lg">
+                          {ret.businessName.charAt(0)}
+                        </div>
+                        <div>
+                          <strong className="text-stone-900 text-sm block">{ret.businessName}</strong>
+                          <span className="text-[10px] text-stone-500">{ret.applicantName} ({ret.mobile})</span>
+                        </div>
                       </div>
-                      <div>
-                        <strong className="text-stone-900 text-sm block">{ret.businessName}</strong>
-                        <span className="text-[10px] text-stone-500">{ret.applicantName} ({ret.mobile})</span>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      {ret.businessType === 'drop_shipper' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900">
-                          DROP SHIPPER
+                      <div className="flex flex-col items-end gap-1">
+                        {ret.businessType === 'drop_shipper' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900">
+                            DROP SHIPPER
+                          </span>
+                        )}
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${ret.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900' :
+                            ret.status === 'APPLICATION_RECEIVED' ? 'bg-amber-100 text-amber-900' :
+                              ret.status === 'UNDER_REVIEW' ? 'bg-sky-100 text-sky-900' :
+                                ret.status === 'ADDITIONAL_INFORMATION_REQUIRED' ? 'bg-orange-100 text-orange-900' :
+                                  'bg-rose-100 text-rose-900'}`}>
+                          {ret.status.replace(/_/g, ' ')}
                         </span>
-                      )}
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        ret.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900' :
-                        ret.status === 'APPLICATION_RECEIVED' ? 'bg-amber-100 text-amber-900' :
-                        ret.status === 'UNDER_REVIEW' ? 'bg-sky-100 text-sky-900' :
-                        ret.status === 'ADDITIONAL_INFORMATION_REQUIRED' ? 'bg-orange-100 text-orange-900' :
-                        'bg-rose-100 text-rose-900'
-                      }`}>
-                        {ret.status.replace(/_/g, ' ')}
-                      </span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 space-y-1 text-stone-600">
+                      <div className="flex justify-between">
+                        <span>GSTIN:</span>
+                        <span className="font-mono font-bold text-stone-800">{ret.gstin || 'Not Required'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Location:</span>
+                        <span>{ret.city ? `${ret.city}, ${ret.state}` : 'Not provided'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>MOQ Policy:</span>
+                        <strong className={ret.moqOverride ? 'text-amber-800 font-bold' : 'text-stone-700'}>
+                          {ret.moqOverride ? `Custom (${ret.customMoqSets} Sets)` : 'Default (4 Sets)'}
+                        </strong>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 space-y-1 text-stone-600">
-                    <div className="flex justify-between">
-                      <span>GSTIN:</span>
-                      <span className="font-mono font-bold text-stone-800">{ret.gstin || 'Not Required'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Location:</span>
-                      <span>{ret.city ? `${ret.city}, ${ret.state}` : 'Not provided'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>MOQ Policy:</span>
-                      <strong className={ret.moqOverride ? 'text-amber-800 font-bold' : 'text-stone-700'}>
-                        {ret.moqOverride ? `Custom (${ret.customMoqSets} Sets)` : 'Default (4 Sets)'}
-                      </strong>
+                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
+                    <Link
+                      href={`/admin/kyc?search=${encodeURIComponent(ret.businessName)}`}
+                      className="text-xs font-semibold text-stone-600 hover:text-stone-900"
+                    >
+                      View KYC Proofs
+                    </Link>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRetailer(ret)}
+                        className="px-3.5 py-1.5 bg-[#831843] hover:bg-rose-900 text-white rounded-lg font-bold text-[11px] shadow transition flex items-center gap-1"
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Set MOQ Policy</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => handleDelete(ret)}
+                        className="p-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                        title="Delete retailer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
-
-                <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                  <Link
-                    href={`/admin/kyc?search=${encodeURIComponent(ret.businessName)}`}
-                    className="text-xs font-semibold text-stone-600 hover:text-stone-900"
-                  >
-                    View KYC Proofs
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRetailer(ret)}
-                    className="px-3.5 py-1.5 bg-[#831843] hover:bg-rose-900 text-white rounded-lg font-bold text-[11px] shadow transition flex items-center gap-1"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Set MOQ Policy</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div><div ref={loadMoreRef} className="h-8 flex items-center justify-center text-[10px] text-stone-400">
+                {loadingMore ? 'Loading more retailers...' : nextCursor ? '' : ''}
+              </div></>
         ) : (
           <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
             No retailer accounts found.

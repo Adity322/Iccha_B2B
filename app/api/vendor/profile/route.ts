@@ -4,14 +4,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireVendor } from "@/lib/auth/guard";
 
-// A vendor can edit their own contact, address, and bank details — but NOT:
-// - gstin / pan          (compliance-sensitive; changing these needs a KYC-style review)
-// - vendorCode           (baked into every SKU already generated under it)
-// - invoicePrefix        (already printed on past invoices)
-// - defaultGstRate       (billing-sensitive, admin-controlled)
-// - isActive              (admin-controlled account status)
-// Those fields are simply not part of this schema, so even if a client sends
-// them they're silently ignored by Zod's default (strip unknown keys) behavior.
 const updateProfileSchema = z.object({
     businessName: z.string().trim().min(1).optional(),
     contactName: z.string().trim().min(1),
@@ -75,23 +67,89 @@ export async function PATCH(request: NextRequest) {
 
         const data = parsed.data;
 
-        const updated = await prisma.vendorProfile.update({
-            where: { id: auth.vendorProfile.id },
-            data: {
-                contactName: data.contactName,
-                mobile: data.mobile,
-                address: data.address,
-                city: data.city,
-                state: data.state,
-                stateCode: data.stateCode,
-                bankName: data.bankName || null,
-                accountHolder: data.accountHolder || null,
-                accountNumber: data.accountNumber || null,
-                ifsc: data.ifsc || null,
-                branch: data.branch || null,
-                upiId: data.upiId || null,
-            },
+        const updated = await prisma.$transaction(async (tx) => {
+            const updatedVendor = await tx.vendorProfile.update({
+                where: { id: auth.vendorProfile.id },
+                data: {
+                    ...(data.businessName ? { businessName: data.businessName } : {}),
+                    contactName: data.contactName,
+                    mobile: data.mobile,
+                    address: data.address,
+                    city: data.city,
+                    state: data.state,
+                    stateCode: data.stateCode,
+                    bankName: data.bankName || null,
+                    accountHolder: data.accountHolder || null,
+                    accountNumber: data.accountNumber || null,
+                    ifsc: data.ifsc || null,
+                    branch: data.branch || null,
+                    upiId: data.upiId || null,
+                },
+            });
+
+            const user = await tx.user.findUnique({
+                where: { id: updatedVendor.userId },
+                select: { email: true },
+            });
+
+            if (!user) {
+                throw new Error("Vendor user not found.");
+            }
+
+            await tx.billingEntity.upsert({
+                where: { code: `vendor:${updatedVendor.vendorCode}` },
+                update: {
+                    legalName: updatedVendor.businessName,
+                    tradeName: updatedVendor.businessName,
+                    gstin: updatedVendor.gstin,
+                    pan: updatedVendor.pan || "",
+                    state: updatedVendor.state,
+                    stateCode: updatedVendor.stateCode,
+                    registeredAddress: [updatedVendor.address, updatedVendor.city, updatedVendor.state]
+                        .filter(Boolean)
+                        .join(", "),
+                    contactEmail: user.email,
+                    contactPhone: updatedVendor.mobile,
+                    bankName: updatedVendor.bankName || "",
+                    accountHolder: updatedVendor.accountHolder || "",
+                    accountNumber: updatedVendor.accountNumber || "",
+                    ifsc: updatedVendor.ifsc || "",
+                    branch: updatedVendor.branch || "",
+                    upiId: updatedVendor.upiId || null,
+                    estimatePrefix: `EST-${updatedVendor.vendorCode}-`,
+                    invoicePrefix: updatedVendor.invoicePrefix,
+                    defaultGstRate: updatedVendor.defaultGstRate,
+                    isActive: updatedVendor.isActive,
+                },
+                create: {
+                    code: `vendor:${updatedVendor.vendorCode}`,
+                    legalName: updatedVendor.businessName,
+                    tradeName: updatedVendor.businessName,
+                    gstin: updatedVendor.gstin,
+                    pan: updatedVendor.pan || "",
+                    state: updatedVendor.state,
+                    stateCode: updatedVendor.stateCode,
+                    registeredAddress: [updatedVendor.address, updatedVendor.city, updatedVendor.state]
+                        .filter(Boolean)
+                        .join(", "),
+                    contactEmail: user.email,
+                    contactPhone: updatedVendor.mobile,
+                    bankName: updatedVendor.bankName || "",
+                    accountHolder: updatedVendor.accountHolder || "",
+                    accountNumber: updatedVendor.accountNumber || "",
+                    ifsc: updatedVendor.ifsc || "",
+                    branch: updatedVendor.branch || "",
+                    upiId: updatedVendor.upiId || null,
+                    estimatePrefix: `EST-${updatedVendor.vendorCode}-`,
+                    invoicePrefix: updatedVendor.invoicePrefix,
+                    defaultGstRate: updatedVendor.defaultGstRate,
+                    isActive: updatedVendor.isActive,
+                },
+            });
+
+            return updatedVendor;
         });
+
         return NextResponse.json({ success: true, data: updated });
     } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

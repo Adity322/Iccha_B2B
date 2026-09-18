@@ -128,10 +128,6 @@ export default function RetailerProductDetailPage() {
   }
 
   const media = product.media ?? [];
-  const isSurat =
-    product.billingEntityCode === 'entity_a' ||
-    product.billingEntityId === 'entity_a';
-
   const cartItem = cart.items.find((item) => item.productId === product.id && (item.selectedSize || null) === (selectedSize || null));
   const existingSets = cartItem?.selectedSets || 0;
 
@@ -213,15 +209,11 @@ export default function RetailerProductDetailPage() {
                 {/* GST Entity */}
                 <div className="absolute top-4 left-4">
                   <span
-                    className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full text-white shadow-md flex items-center gap-1.5 uppercase tracking-wider ${
-                      isSurat ? 'bg-[#831843]' : 'bg-[#9a3412]'
-                    }`}
+                    className="text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full text-white shadow-md flex items-center gap-1.5 uppercase tracking-wider bg-[#831843]"
                   >
                     <Building2 className="w-3.5 h-3.5" />
 
-                    {isSurat
-                      ? 'Surat Hub (GST Entity A)'
-                      : 'Jaipur Hub (GST Entity B)'}
+                    {product.sellerName ? `Seller: ${product.sellerName}` : 'IcchaStore'}
                   </span>
                 </div>
 

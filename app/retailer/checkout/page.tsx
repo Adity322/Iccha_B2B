@@ -148,7 +148,7 @@ export default function RetailerCheckoutPage() {
               Finalize Master Order Enquiry
             </h1>
             <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
-              Review multi-entity division allocations, transport details, and generate formal Proforma Estimates.
+              Review seller-wise allocations, transport details, and generate formal Proforma Estimates.
             </p>
           </div>
 
@@ -294,35 +294,34 @@ export default function RetailerCheckoutPage() {
 
             </div>
 
-            {/* Right Column: Multi-Entity Order Breakdown & Submission */}
+            {/* Right Column: Seller-wise Order Breakdown & Submission */}
             <div className="lg:col-span-5 space-y-6 text-xs">
 
-              {/* Dual Entity Preview Card */}
+              {/* Seller-wise Proforma Preview Card */}
               <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-md space-y-5">
                 <div className="border-b border-stone-100 pb-3">
                   <span className="text-[10px] uppercase font-bold text-stone-400 block tracking-wider">
-                    Automated Division Split
+                    Automated Seller Split
                   </span>
                   <h3 className="font-serif text-lg font-bold text-stone-900">
                     Proforma Estimates Preview
                   </h3>
                 </div>
 
-                {/* Division Breakdown Chips */}
+                {/* Seller Breakdown */}
                 <div className="space-y-3">
                   {cart.entitySummaries.map((summary) => {
-                    const isSurat = summary.entityId === 'entity_a';
+                    const isPlatform = summary.entity?.code === 'platform';
                     return (
                       <div
                         key={summary.entityId}
-                        className={`p-4 rounded-2xl border space-y-2 ${isSurat ? 'bg-rose-50/60 border-rose-200' : 'bg-amber-50/60 border-amber-200'
-                          }`}
+                        className="p-4 rounded-2xl border space-y-2 bg-stone-50 border-stone-200"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Building2 className={`w-4 h-4 ${isSurat ? 'text-[#831843]' : 'text-[#9a3412]'}`} />
+                            <Building2 className="w-4 h-4 text-[#831843]" />
                             <strong className="text-stone-900">
-                              {isSurat ? 'Surat Division (GST A)' : 'Jaipur Unit (GST B)'}
+                              {isPlatform ? 'IcchaStore' : 'Vendor'}
                             </strong>
                           </div>
                           <span className="text-[10px] bg-white px-2 py-0.5 rounded font-mono font-bold text-stone-700">
@@ -340,7 +339,7 @@ export default function RetailerCheckoutPage() {
                         </div>
 
                         <div className="pt-2 border-t border-stone-200/80 flex justify-between items-baseline font-medium">
-                          <span>Division Subtotal + Taxes:</span>
+                          <span>Seller Subtotal + Taxes:</span>
                           <span className="font-mono font-bold text-stone-900">
                             ₹{summary.total.toLocaleString('en-IN')}
                           </span>

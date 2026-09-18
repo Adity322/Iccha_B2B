@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -45,46 +45,73 @@ function AdminKYCContent() {
 
   const [applications, setApplications] = useState<KycApplication[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [selectedApp, setSelectedApp] = useState<KycApplication | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [reviewerRemarks, setReviewerRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchApplications = async () => {
-    setLoading(true);
-    const res = await fetch('/api/admin/kyc');
-    const result = await res.json();
-    if (res.ok && result.success) {
-      setApplications(result.data);
-      if (reviewIdParam) {
-        const found = result.data.find((a: KycApplication) => a.id === reviewIdParam);
-        if (found) setSelectedApp(found);
+  const fetchApplications = async (cursor?: string | null) => {
+    if (cursor) setLoadingMore(true);
+    else setLoading(true);
+
+    try {
+      const params = new URLSearchParams();
+      if (cursor) params.set('cursor', cursor);
+      if (search.trim()) params.set('search', search.trim());
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+
+      const res = await fetch(`/api/admin/kyc?${params.toString()}`);
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setApplications(prev => cursor ? [...prev, ...result.data] : result.data);
+        setNextCursor(result.nextCursor);
+      } else {
+        addToast({ type: 'error', title: 'Failed to load applications', message: result.error || '' });
       }
-    } else {
-      addToast({ type: 'error', title: 'Failed to load applications', message: result.error || '' });
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchApplications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, search]);
+
+  useEffect(() => {
+    if (!reviewIdParam) return;
+
+    const loadReviewApplication = async () => {
+      const res = await fetch(`/api/admin/kyc?id=${reviewIdParam}`);
+      const result = await res.json();
+      if (res.ok && result.success && result.data[0]) {
+        setSelectedApp(result.data[0]);
+      }
+    };
+
+    loadReviewApplication();
   }, [reviewIdParam]);
 
-  const filteredApps = applications.filter(a => {
-    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        a.businessName.toLowerCase().includes(q) ||
-        (a.gstin || '').toLowerCase().includes(q) ||
-        a.applicantName.toLowerCase().includes(q) ||
-        a.mobile.includes(q)
-      );
-    }
-    return true;
-  });
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && nextCursor && !loadingMore) {
+          fetchApplications(nextCursor);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextCursor, loadingMore]);
 
   const handleUpdateStatus = async (action: 'approve' | 'reject' | 'request_info') => {
     if (!selectedApp) return;
@@ -173,9 +200,9 @@ function AdminKYCContent() {
           <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
             Loading KYC records...
           </div>
-        ) : filteredApps.length > 0 ? (
+        ) : applications.length > 0 ? (
           <div className="space-y-4">
-            {filteredApps.map((app) => (
+            {applications.map((app) => (
               <div
                 key={app.id}
                 className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm hover:shadow-md transition space-y-4 text-xs"
@@ -245,6 +272,9 @@ function AdminKYCContent() {
                 </div>
               </div>
             ))}
+            <div ref={loadMoreRef} className="h-8 flex items-center justify-center text-xs text-stone-400">
+              {loadingMore ? 'Loading more applications...' : nextCursor ? '' : 'No more applications'}
+            </div>
           </div>
         ) : (
           <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center space-y-2 text-xs text-stone-500">

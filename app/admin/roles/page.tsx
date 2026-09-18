@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { UserCog, Search, ArrowUpCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { UserCog, Search, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { useApp } from '@/lib/context/AppContext';
 
@@ -15,14 +15,25 @@ interface UserRow {
   businessType: string | null;
   gstin: string | null;
   vendorActive: boolean | null;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    stateCode: string;
+    pincode: string;
+  } | null;
 }
 
 export default function AdminRolesPage() {
   const { addToast } = useApp();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [promoting, setPromoting] = useState<UserRow | null>(null);
+  const [demoting, setDemoting] = useState<UserRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
@@ -34,31 +45,56 @@ export default function AdminRolesPage() {
     stateCode: '',
   });
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    const res = await fetch('/api/admin/users');
+  const fetchUsers = async (cursor?: string | null, query = search) => {
+    if (cursor) setLoadingMore(true);
+    else setLoading(true);
+
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    if (query.trim()) params.set('search', query.trim());
+
+    const res = await fetch(`/api/admin/users?${params.toString()}`);
     const result = await res.json();
+
     if (res.ok && result.success) {
-      setUsers(result.data);
+      setUsers(prev => cursor ? [...prev, ...result.data] : result.data);
+      setNextCursor(result.nextCursor);
     } else {
       addToast({ type: 'error', title: 'Failed to load users', message: result.error || '' });
     }
+
     setLoading(false);
+    setLoadingMore(false);
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const timer = setTimeout(() => fetchUsers(null, search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && nextCursor && !loadingMore) {
+          fetchUsers(nextCursor);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [nextCursor, loadingMore]);
 
   const openPromote = (u: UserRow) => {
     setPromoting(u);
     setForm({
       contactName: u.name,
       gstin: u.gstin || '',
-      address: '',
-      city: '',
-      state: '',
-      stateCode: '',
+      address: u.address?.street || '',
+      city: u.address?.city || '',
+      state: u.address?.state || '',
+      stateCode: u.address?.stateCode || '',
     });
   };
 
@@ -91,15 +127,31 @@ export default function AdminRolesPage() {
     }
   };
 
-  const filtered = users.filter(u => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      (u.businessName || '').toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      u.name.toLowerCase().includes(q)
-    );
-  });
+  const handleDemote = async () => {
+    if (!demoting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/users/${demoting.id}/demote-vendor`, {
+        method: 'PATCH',
+      });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        addToast({ type: 'error', title: 'Demotion failed', message: result.error || 'Please try again.' });
+        setSubmitting(false);
+        return;
+      }
+
+      addToast({ type: 'success', title: 'Demoted to Retailer', message: result.message || `${demoting.businessName} is now a retailer account.` });
+      setDemoting(null);
+      await fetchUsers();
+    } catch (err) {
+      console.error(err);
+      addToast({ type: 'error', title: 'Demotion failed', message: 'Something went wrong.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-[#faf8f5]">
@@ -149,7 +201,7 @@ export default function AdminRolesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((u) => (
+                {users.map((u) => (
                   <tr key={u.id} className="border-t border-stone-100">
                     <td className="p-4 font-semibold text-stone-900">{u.businessName || '—'}</td>
                     <td className="p-4 text-stone-600">{u.email}</td>
@@ -174,13 +226,27 @@ export default function AdminRolesPage() {
                           <span>Promote to Vendor</span>
                         </button>
                       )}
+                      {u.role === 'VENDOR' && (
+                        <button
+                          type="button"
+                          onClick={() => setDemoting(u)}
+                          className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg font-bold text-[11px] shadow-sm transition inline-flex items-center gap-1.5"
+                        >
+                          <ArrowDownCircle className="w-3.5 h-3.5" />
+                          <span>Demote to Retailer</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && (
+            {users.length === 0 && (
               <div className="p-12 text-center text-stone-500">No accounts found.</div>
+            )}
+            <div ref={loadMoreRef} className="h-1" />
+            {loadingMore && (
+              <div className="p-4 text-center text-stone-500">Loading more accounts...</div>
             )}
           </div>
         )}
@@ -204,7 +270,9 @@ export default function AdminRolesPage() {
             </div>
 
             <p className="text-stone-500">
-              Vendor accounts need billing details on file. Fill these in once — the retailer's existing name, mobile, and PAN carry over automatically.
+              Vendor accounts need billing details on file. The retailer's existing name, mobile, PAN,
+              and address (from their KYC application) carry over automatically — just review and adjust
+              if needed.
             </p>
 
             <div className="grid grid-cols-2 gap-3">
@@ -287,6 +355,46 @@ export default function AdminRolesPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {demoting && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-stone-200 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <h3 className="font-serif text-lg font-bold text-stone-900 flex items-center gap-2">
+                <UserCog className="w-5 h-5 text-[#831843]" />
+                Demote {demoting.businessName} to Retailer
+              </h3>
+              <button type="button" onClick={() => setDemoting(null)} className="text-stone-400 font-bold text-sm">
+                &times;
+              </button>
+            </div>
+
+            <p className="text-stone-600">
+              This revokes vendor login access. Their vendor profile is deactivated (not deleted), so
+              existing products and past orders tied to it are preserved. They'll fall back to their
+              existing retailer account.
+            </p>
+
+            <div className="flex gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setDemoting(null)}
+                className="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDemote}
+                disabled={submitting}
+                className="flex-1 py-2.5 bg-rose-900 hover:bg-rose-950 text-white rounded-xl font-bold shadow transition disabled:opacity-60"
+              >
+                {submitting ? 'Demoting...' : 'Confirm Demotion'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

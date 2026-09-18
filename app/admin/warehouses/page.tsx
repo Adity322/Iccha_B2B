@@ -7,6 +7,7 @@ import {
   Loader2,
   MapPin,
   X,
+  Trash2,
 } from 'lucide-react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 
@@ -19,6 +20,9 @@ interface Warehouse {
   pincode: string | null;
   isActive: boolean;
   createdAt: string;
+  vendorId: string | null;
+  vendorName: string | null;
+  isMine: boolean;
 }
 
 interface WarehouseForm {
@@ -33,10 +37,14 @@ export default function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deletingWarehouse, setDeletingWarehouse] = useState<Warehouse | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   const [formData, setFormData] = useState<WarehouseForm>({
     name: '',
@@ -45,6 +53,23 @@ export default function WarehousesPage() {
     state: '',
     pincode: '',
   });
+
+  // ============================================================
+  // LOAD CURRENT USER ROLE (so the header/labels read correctly
+  // whether an admin or a vendor is looking at this shared page)
+  // ============================================================
+
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setRole(json.data.role);
+      })
+      .catch(() => {});
+  }, []);
+
+  const isStaff = role !== null && role !== 'VENDOR';
+  const portalLabel = isStaff ? 'Admin Console' : 'Vendor Portal';
 
   // ============================================================
   // LOAD VENDOR WAREHOUSES
@@ -139,6 +164,37 @@ export default function WarehousesPage() {
   };
 
   // ============================================================
+  // DELETE WAREHOUSE
+  // ============================================================
+
+  const handleDeleteWarehouse = async () => {
+    if (!deletingWarehouse) return;
+
+    setDeleting(true);
+    setDeleteError('');
+
+    try {
+      const res = await fetch(`/api/vendor/warehouses/${deletingWarehouse.id}`, {
+        method: 'DELETE',
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        setDeleteError(json.error || 'Failed to delete warehouse.');
+        return;
+      }
+
+      setWarehouses(prev => prev.filter(w => w.id !== deletingWarehouse.id));
+      setDeletingWarehouse(null);
+    } catch {
+      setDeleteError('Could not delete warehouse. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ============================================================
   // PAGE
   // ============================================================
 
@@ -158,7 +214,7 @@ export default function WarehousesPage() {
 
           <div>
             <span className="text-xs uppercase font-bold tracking-widest text-[#831843]">
-              Vendor Portal
+              {portalLabel}
             </span>
 
             <h1 className="font-serif text-3xl font-bold text-stone-900 mt-1">
@@ -166,7 +222,9 @@ export default function WarehousesPage() {
             </h1>
 
             <p className="text-xs text-stone-500 mt-0.5">
-              Manage the warehouses where your products are stored.
+              {isStaff
+                ? 'Manage platform warehouses and view every vendor\u2019s dispatch centers.'
+                : 'Manage the warehouses where your products are stored.'}
             </p>
           </div>
 
@@ -255,18 +313,40 @@ export default function WarehousesPage() {
                         {warehouse.name}
                       </h3>
 
-                      <span
-                        className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          warehouse.isActive
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-stone-100 text-stone-500'
-                        }`}
-                      >
-                        {warehouse.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span
+                          className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            warehouse.isActive
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-stone-100 text-stone-500'
+                          }`}
+                        >
+                          {warehouse.isActive ? 'Active' : 'Inactive'}
+                        </span>
+
+                        {isStaff && warehouse.vendorName && (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                            {warehouse.vendorName}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                   </div>
+
+                  {warehouse.isMine && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteError('');
+                        setDeletingWarehouse(warehouse);
+                      }}
+                      title="Delete warehouse"
+                      className="text-stone-400 hover:text-red-600 transition shrink-0 p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
 
                 </div>
 
@@ -332,7 +412,7 @@ export default function WarehousesPage() {
 
                   <div>
                     <span className="text-[10px] uppercase font-bold tracking-widest text-[#831843]">
-                      Vendor Portal
+                      {portalLabel}
                     </span>
 
                     <h2 className="font-serif text-xl font-bold text-stone-900 mt-1">
@@ -501,6 +581,66 @@ export default function WarehousesPage() {
 
                 </form>
 
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+        {/* ======================================================
+            DELETE WAREHOUSE CONFIRMATION
+        ====================================================== */}
+
+        {deletingWarehouse && (
+
+          <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-stone-200 shadow-2xl space-y-4 text-xs">
+
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <h3 className="font-serif text-lg font-bold text-stone-900">
+                  Delete "{deletingWarehouse.name}"?
+                </h3>
+
+                <button
+                  type="button"
+                  onClick={() => setDeletingWarehouse(null)}
+                  className="text-stone-400 font-bold text-sm"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <p className="text-stone-600">
+                This can't be undone. If any products are still assigned to this warehouse,
+                deletion will be blocked until they're reassigned.
+              </p>
+
+              {deleteError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-red-700">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setDeletingWarehouse(null)}
+                  className="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDeleteWarehouse}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 bg-rose-900 hover:bg-rose-950 text-white rounded-xl font-bold shadow transition disabled:opacity-60"
+                >
+                  {deleting ? 'Deleting...' : 'Confirm Delete'}
+                </button>
               </div>
 
             </div>

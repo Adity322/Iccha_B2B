@@ -16,30 +16,140 @@ import {
 import RetailerHeader from '@/components/layout/RetailerHeader';
 import Footer from '@/components/layout/Footer';
 import EstimateViewModal from '@/components/order/EstimateViewModal';
-import { OrderService } from '@/lib/services';
-import { EstimateDocument } from '@/lib/types';
+import { EstimateDocument, BillingEntity, OrderItem, Address } from '@/lib/types';
 import { useApp } from '@/lib/context/AppContext';
 
 export default function RetailerEstimatesPage() {
-  const { currentRetailer } = useApp();
   const [estimates, setEstimates] = useState<EstimateDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEstimate, setSelectedEstimate] = useState<EstimateDocument | null>(null);
-  const [entityFilter, setEntityFilter] = useState<string>('all');
+  const [sellerFilter, setSellerFilter] = useState<string>('all');
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setLoading(true);
-      const orders = await OrderService.getOrders(currentRetailer?.id ? { retailerId: currentRetailer.id } : undefined);
-      const allEsts = orders.flatMap(o => o.estimates || []);
-      setEstimates(allEsts);
-      setLoading(false);
+      try {
+        const response = await fetch('/api/retailer/order-enquiries', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        const json = await response.json();
+
+        if (!response.ok || !json.success) {
+          throw new Error(json.error || 'Could not load proforma estimates.');
+        }
+
+        const mapped: EstimateDocument[] = (json.data || []).flatMap((order: any) =>
+          (order.estimates || []).map((estimate: any) => {
+            const rawBilling = estimate.billingEntity;
+            const billingEntity: BillingEntity = {
+              id: rawBilling.id,
+              code: rawBilling.code,
+              legalName: rawBilling.legalName,
+              tradeName: rawBilling.tradeName || rawBilling.legalName,
+              gstin: rawBilling.gstin,
+              pan: rawBilling.pan || '',
+              registeredAddress: rawBilling.registeredAddress,
+              state: rawBilling.state,
+              stateCode: rawBilling.stateCode,
+              contactEmail: rawBilling.contactEmail || '',
+              contactPhone: rawBilling.contactPhone || '',
+              bankDetails: {
+                bankName: rawBilling.bankName || '',
+                accountNumber: rawBilling.accountNumber || '',
+                accountHolder: rawBilling.accountHolder || '',
+                ifsc: rawBilling.ifsc || '',
+                branch: rawBilling.branch || '',
+                upiId: rawBilling.upiId || undefined,
+              },
+              estimatePrefix: rawBilling.estimatePrefix || '',
+              invoicePrefix: rawBilling.invoicePrefix || '',
+              assignedCategoryIds: [],
+              taxConfig: {
+                cgstRate: estimate.isInterState ? 0 : Number(estimate.totalGst || 0) > 0 && Number(estimate.taxableSubtotal || 0) > 0 ? Number(estimate.totalGst) / Number(estimate.taxableSubtotal) * 50 : 0,
+                sgstRate: estimate.isInterState ? 0 : Number(estimate.totalGst || 0) > 0 && Number(estimate.taxableSubtotal || 0) > 0 ? Number(estimate.totalGst) / Number(estimate.taxableSubtotal) * 50 : 0,
+                igstRate: estimate.isInterState ? (Number(estimate.totalGst || 0) > 0 && Number(estimate.taxableSubtotal || 0) > 0 ? Number(estimate.totalGst) / Number(estimate.taxableSubtotal) * 100 : 0) : 0,
+                defaultGstRate: Number(rawBilling.defaultGstRate || 0),
+              },
+            };
+
+            const items: OrderItem[] = (order.items || [])
+              .filter((item: any) => item.billingEntityId === estimate.billingEntityId)
+              .map((item: any) => ({
+                ...item,
+                imageUrl: item.imageUrl || '',
+                color: item.color || 'Assorted',
+                sizeCombination: item.sizeCombination || 'Assorted',
+                pieceRate: Number(item.pieceRate || 0),
+                setRate: Number(item.setRate || 0),
+                lineSubtotal: Number(item.lineSubtotal || 0),
+                gstRate: Number(item.gstRate || 0),
+                gstAmount: Number(item.gstAmount || 0),
+                totalWithGst: Number(item.totalWithGst || 0),
+              }));
+
+            const fallbackAddress: Address = {
+              street: '', city: '', state: '', stateCode: '', pincode: ''
+            };
+
+            return {
+              id: estimate.id,
+              estimateNumber: estimate.estimateNumber,
+              orderId: estimate.orderId,
+              orderNumber: estimate.orderNumber,
+              date: estimate.date,
+              validUntil: estimate.validUntil,
+              billingEntity,
+              retailer: {
+                id: order.retailerId || '',
+                businessName: order.retailerBusinessName || '',
+                applicantName: order.retailerApplicantName || '',
+                gstin: order.retailerGstin || '',
+                pan: '',
+                mobile: order.retailerContact || '',
+                email: order.retailerEmail || '',
+                billingAddress: order.billingAddress || fallbackAddress,
+                shippingAddress: order.shippingAddress || fallbackAddress,
+              },
+              items,
+              totalSets: estimate.totalSets,
+              totalPieces: estimate.totalPieces,
+              taxableSubtotal: Number(estimate.taxableSubtotal || 0),
+              isInterState: Boolean(estimate.isInterState),
+              cgstAmount: Number(estimate.cgstAmount || 0),
+              sgstAmount: Number(estimate.sgstAmount || 0),
+              igstAmount: Number(estimate.igstAmount || 0),
+              totalGst: Number(estimate.totalGst || 0),
+              shippingCharge: Number(estimate.shippingCharge || 0),
+              grandTotal: Number(estimate.grandTotal || 0),
+              paymentTerms: [],
+            } as EstimateDocument;
+          })
+        );
+
+        if (!cancelled) setEstimates(mapped);
+      } catch (err) {
+        console.error('Load estimates failed:', err);
+        if (!cancelled) setEstimates([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
+
     load();
-  }, [currentRetailer]);
+    return () => { cancelled = true; };
+  }, []);
+
+  const sellerOptions = Array.from(
+    new Map(
+      estimates.map((estimate) => [estimate.billingEntity.id, estimate.billingEntity])
+    ).values()
+  );
 
   const filteredEstimates = estimates.filter(e => {
-    if (entityFilter !== 'all' && e.billingEntity?.id !== entityFilter) return false;
+    if (sellerFilter !== 'all' && e.billingEntity?.id !== sellerFilter) return false;
     return true;
   });
 
@@ -63,31 +173,26 @@ export default function RetailerEstimatesPage() {
               </h1>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => setEntityFilter('all')}
+                onClick={() => setSellerFilter('all')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  entityFilter === 'all' ? 'bg-[#831843] text-white' : 'bg-white border border-stone-200 text-stone-700'
+                  sellerFilter === 'all' ? 'bg-[#831843] text-white' : 'bg-white border border-stone-200 text-stone-700'
                 }`}
               >
-                All Entities
+                All Sellers
               </button>
-              <button
-                onClick={() => setEntityFilter('entity_a')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  entityFilter === 'entity_a' ? 'bg-[#831843] text-white' : 'bg-white border border-stone-200 text-stone-700'
-                }`}
-              >
-                Surat Hub (GST A)
-              </button>
-              <button
-                onClick={() => setEntityFilter('entity_b')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  entityFilter === 'entity_b' ? 'bg-[#9a3412] text-white' : 'bg-white border border-stone-200 text-stone-700'
-                }`}
-              >
-                Jaipur Hub (GST B)
-              </button>
+              {sellerOptions.map((seller) => (
+                <button
+                  key={seller.id}
+                  onClick={() => setSellerFilter(seller.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    sellerFilter === seller.id ? 'bg-[#831843] text-white' : 'bg-white border border-stone-200 text-stone-700'
+                  }`}
+                >
+                  {seller.code === 'platform' ? 'IcchaStore' : seller.tradeName || seller.legalName}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -99,7 +204,7 @@ export default function RetailerEstimatesPage() {
           ) : filteredEstimates.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredEstimates.map((est) => {
-                const isSurat = est.billingEntity?.id === 'entity_a';
+                const isPlatform = est.billingEntity?.code === 'platform';
                 return (
                   <div
                     key={est.id}
@@ -108,10 +213,10 @@ export default function RetailerEstimatesPage() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <span className={`px-2.5 py-1 rounded-lg font-bold text-[10px] uppercase text-white flex items-center gap-1 ${
-                          isSurat ? 'bg-[#831843]' : 'bg-[#9a3412]'
+                          'bg-[#831843]'
                         }`}>
                           <Building2 className="w-3 h-3" />
-                          {isSurat ? 'Surat Division' : 'Jaipur Division'}
+                          {isPlatform ? 'IcchaStore' : 'Vendor'}
                         </span>
                         <span className="font-mono text-stone-500 font-semibold">
                           #{est.estimateNumber}

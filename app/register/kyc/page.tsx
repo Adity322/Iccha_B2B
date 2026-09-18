@@ -174,6 +174,11 @@ export default function RegisterKYCPage() {
           gstin: isDropShipper ? undefined : gstin,
           pan: pan || undefined,
           businessType: step1Data.legalEntityType,
+          street: step1Data.street,
+          city: step1Data.city,
+          state: step1Data.state,
+          stateCode: step1Data.stateCode,
+          pincode: step1Data.pincode,
         }),
       });
 

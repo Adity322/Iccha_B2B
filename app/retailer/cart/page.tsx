@@ -187,7 +187,7 @@ export default function RetailerCartPage() {
                       B2B Commercial Invoicing Notice:
                     </div>
                     <p>
-                      This enquiry will generate separate proforma estimates for <strong>Surat Division</strong> and <strong>Jaipur Unit</strong> with official bank RTGS details. No online payment is debited on this site.
+                      This enquiry will generate separate proforma estimates for each applicable seller, using that seller's registered GST and official bank details. No online payment is debited on this site.
                     </p>
                   </div>
 

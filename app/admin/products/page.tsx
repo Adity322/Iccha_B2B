@@ -42,16 +42,6 @@ interface Warehouse {
   isActive: boolean;
 }
 
-interface BillingEntity {
-  id: string;
-  code: string;
-  legalName: string;
-  tradeName: string | null;
-  gstin: string;
-  state: string;
-  stateCode: string;
-  defaultGstRate: string | number;
-}
 
 interface Product {
   id: string;
@@ -128,8 +118,6 @@ export default function AdminProductsPage() {
   const [currentUserChecked, setCurrentUserChecked] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
-  const [billingEntitiesLoading, setBillingEntitiesLoading] = useState(false);
   const [sizeStocks, setSizeStocks] = useState<{ size: string; availableSets: number }[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -137,7 +125,6 @@ export default function AdminProductsPage() {
     designNumber: '',
     categoryId: '',
     warehouseId: '',
-    billingEntityId: '',
     wholesalePricePerPiece: 500,
     piecesPerSet: 1,
     sizeCombination: 'M, L, XL, XXL',
@@ -194,37 +181,6 @@ export default function AdminProductsPage() {
         // Category dropdown will just be empty; product creation will fail validation until this exists.
       });
   }, []);
-
-  // --- Load active billing entities (required for every product) ---
-  useEffect(() => {
-    const loadBillingEntities = async () => {
-      try {
-        setBillingEntitiesLoading(true);
-        const res = await fetch('/api/admin/billing-entities');
-        const json = await res.json();
-
-        if (json.success) {
-          setBillingEntities(json.data);
-        } else {
-          addToast({
-            type: 'error',
-            title: 'Failed to load billing entities',
-            message: json.error || 'Could not load billing entities.',
-          });
-        }
-      } catch {
-        addToast({
-          type: 'error',
-          title: 'Network error',
-          message: 'Could not load billing entities.',
-        });
-      } finally {
-        setBillingEntitiesLoading(false);
-      }
-    };
-
-    loadBillingEntities();
-  }, [addToast]);
 
   // --- Load warehouses for vendors ---
   useEffect(() => {
@@ -349,7 +305,6 @@ export default function AdminProductsPage() {
       designNumber: `${Math.floor(1000 + Math.random() * 9000)}`,
       categoryId: categories[0]?.id || '',
       warehouseId: '',
-      billingEntityId: billingEntities[0]?.id || '',
       wholesalePricePerPiece: 500,
       piecesPerSet: 1,
       sizeCombination: '',
@@ -441,7 +396,6 @@ export default function AdminProductsPage() {
       slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       categoryId: formData.categoryId,
       warehouseId: formData.warehouseId,
-      billingEntityId: formData.billingEntityId,
       wholesalePricePerPiece: Number(formData.wholesalePricePerPiece),
       piecesPerSet: Number(formData.piecesPerSet),
       wholesalePricePerSet: Number(formData.wholesalePricePerPiece) * Number(formData.piecesPerSet),
@@ -519,7 +473,6 @@ export default function AdminProductsPage() {
       designNumber: product.designNumber || '',
       categoryId: product.categoryId || '',
       warehouseId: product.warehouse?.id || '',
-      billingEntityId: product.gstConfig?.billingEntity?.id || '',
       wholesalePricePerPiece: Number(product.wholesalePricePerPiece) || 0,
       piecesPerSet: Math.max(1, Number(product.piecesPerSet) || 1),
       sizeCombination: product.sizeCombination || '',
@@ -1036,53 +989,17 @@ export default function AdminProductsPage() {
                   )}
                 </div>
 
-                <div>
-                  <label className="block font-bold text-stone-800 mb-1">
-                    Billing Entity *
-                  </label>
-                  <select
-                    required
-                    value={formData.billingEntityId}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        billingEntityId: e.target.value,
-                      })
-                    }
-                    disabled={billingEntitiesLoading}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 disabled:opacity-60"
-                  >
-                    <option value="">
-                      {billingEntitiesLoading
-                        ? 'Loading billing entities...'
-                        : 'Select a billing entity...'}
-                    </option>
-
-                    {billingEntities
-                      .filter(entity => entity.id)
-                      .map(entity => (
-                        <option key={entity.id} value={entity.id}>
-                          {entity.code.toUpperCase()} — {entity.tradeName || entity.legalName}
-                          {' — '}GSTIN: {entity.gstin} ({entity.state})
-                        </option>
-                      ))}
-                  </select>
-
-                  {!billingEntitiesLoading && billingEntities.length === 0 && (
-                    <p className="text-[10px] text-amber-700 mt-1">
-                      No active billing entities are configured. Product creation will not be
-                      possible until one is available.
-                    </p>
-                  )}
-
-                  {formData.billingEntityId && (
-                    <p className="text-[10px] text-stone-400 mt-1">
-                      GST configuration for this product will be resolved using this billing
-                      entity and the HSN code.
-                    </p>
-                  )}
+                <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                  <label className="block font-bold text-stone-800 mb-1">Billing Entity</label>
+                  <p className="text-xs text-stone-600">
+                    {selectedVendor
+                      ? `Automatically assigned from ${selectedVendor.businessName}'s vendor GST/billing details.`
+                      :  "Automatically assigned from IcchaStore's platform billing entity."}
+                      </p>
+                  <p className="text-[10px] text-stone-400 mt-1">
+                    The backend resolves the billing entity from the product owner, so it cannot be accidentally assigned to another vendor.
+                  </p>
                 </div>
-
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block font-bold text-stone-800 mb-1">Piece Rate (₹) *</label>

@@ -43,18 +43,17 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
 
   return (
     <div className="space-y-6">
-      {/* Notice regarding automated multi-entity GST billing */}
+      {/* Notice for carts containing products from multiple sellers */}
       {summaries.length > 1 && (
         <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl flex items-start gap-2.5 text-xs text-sky-900">
           <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
           <div className="leading-relaxed">
-            <strong>Dual GST Entity Order:</strong> Your wholesale cart contains products from both our <strong>Surat Manufacturing Division</strong> and <strong>Jaipur Cotton Unit</strong>. For legal GST compliance, two separate proforma estimates will be automatically prepared under this single Master Order Enquiry.
+            <strong>Multiple Seller Order:</strong> Your wholesale cart contains products from multiple sellers. Each seller's current GST and legal details are shown separately, and separate proforma estimates can be prepared for each seller under this single Master Order Enquiry.
           </div>
         </div>
       )}
 
-      {/* Render each GST Entity group */}
-      {/* Render each GST Entity group */}
+      {/* Render each seller billing group */}
       {summaries.map((group) => {
         // Guard: cart items whose product has no valid GST billing entity
         if (!group.entity) {
@@ -65,8 +64,8 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
             >
               <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <strong>Billing information missing:</strong> {group.totalSets} set(s) in your cart
-                are linked to product(s) without GST entity configuration. These items can't be
+                <strong>Seller billing information missing:</strong> {group.totalSets} set(s) in your cart
+                are linked to product(s) without seller GST configuration. These items can't be
                 included in checkout yet — please remove them or contact support.
               </div>
             </div>
@@ -74,24 +73,22 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
         }
 
         const entity = group.entity; // now guaranteed non-null below
-        const isSurat = group.entityId === 'entity_a';
+        const isPlatform = entity.code === 'platform';
         return (
           <div
             key={group.entityId}
             className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm transition hover:border-stone-300"
           >
             {/* Entity Header Banner */}
-            <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSurat ? 'bg-rose-950/10 border-rose-200' : 'bg-amber-950/10 border-amber-200'
-              }`}>
+            <div className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50 border-stone-200">
               <div className="flex items-start gap-3">
-                <div className={`p-2.5 rounded-xl text-white font-serif font-bold text-base shadow ${isSurat ? 'bg-[#831843]' : 'bg-[#9a3412]'
-                  }`}>
+                <div className="p-2.5 rounded-xl text-white font-serif font-bold text-base shadow bg-[#831843]">
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
-                      Billing Entity {group.entityId === 'entity_a' ? 'A (Surat Division)' : 'B (Jaipur Division)'}
+                      {isPlatform ? 'IcchaStore Billing Details' : 'Vendor Billing Details'}
                     </span>
                     <span className="text-[10px] bg-stone-100 font-mono text-stone-700 px-2 py-0.5 rounded border border-stone-200">
                       GSTIN: {entity.gstin}
@@ -109,7 +106,7 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
               {/* ...rest unchanged... */}
               {/* Group Sub-Stats */}
               <div className="text-right self-start sm:self-center bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-stone-200/80">
-                <span className="text-[10px] uppercase font-bold text-stone-400 block">Division Lots</span>
+                <span className="text-[10px] uppercase font-bold text-stone-400 block">Seller Lots</span>
                 <span className="text-xs font-bold text-stone-800">
                   {group.totalSets} Sets ({group.totalPieces} Pcs)
                 </span>
@@ -221,7 +218,7 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
               </div>
 
               <div className="flex items-center gap-4 self-end sm:self-center">
-                <span className="text-stone-500 font-medium">Entity {group.entityId === 'entity_a' ? 'A' : 'B'} Subtotal:</span>
+                <span className="text-stone-500 font-medium">{isPlatform ? 'IcchaStore' : 'Seller'} Subtotal:</span>
                 <span className="text-base font-bold text-stone-900">
                   ₹{group.total.toLocaleString('en-IN')}
                 </span>

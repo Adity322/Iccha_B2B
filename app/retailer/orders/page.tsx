@@ -204,21 +204,21 @@ export default function RetailerOrdersPage() {
                   {/* Dual Entity Proforma Badges */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     {(order.estimates || []).map((est: any) => {
-                      const isSurat = est.billingEntity?.id === 'entity_a';
+                      const isPlatform = est.billingEntity?.code === 'platform';
                       return (
                         <div
                           key={est.id}
                           className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
-                            isSurat ? 'bg-rose-50/70 border-rose-200' : 'bg-amber-50/70 border-amber-200'
+                            'bg-stone-50 border-stone-200'
                           }`}
                         >
                           <div className="flex items-center gap-2.5">
-                            <div className={`p-2 rounded-xl text-white ${isSurat ? 'bg-[#831843]' : 'bg-[#9a3412]'}`}>
+                            <div className="p-2 rounded-xl text-white bg-[#831843]">
                               <Building2 className="w-4 h-4" />
                             </div>
                             <div>
                               <strong className="text-stone-900 block">
-                                {isSurat ? 'Surat Division (GST A)' : 'Jaipur Unit (GST B)'}
+                                {isPlatform ? 'IcchaStore' : (est.billingEntity?.tradeName || est.billingEntity?.legalName || 'Vendor')}
                               </strong>
                               <span className="text-[10px] text-stone-600 font-mono">
                                 Proforma: #{est.estimateNumber} &bull; ₹{Number(est.grandTotal || 0).toLocaleString('en-IN')}

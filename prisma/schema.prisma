@@ -66,7 +66,7 @@ model VendorProfile {
 
 model Warehouse {
   id        String   @id @default(uuid())
-  vendorId  String
+  vendorId  String? // null = platform/admin-owned warehouse, not tied to a vendor
   name      String
   address   String?
   city      String?
@@ -76,7 +76,7 @@ model Warehouse {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vendor   VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor   VendorProfile? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   products Product[]
 
   @@index([vendorId])
@@ -311,6 +311,7 @@ model Category {
   type            String   @default("kurti_pant_set") // "kurti_pant_set" | "3_pc_suit" | "kurti_only"
   billingEntityId String?
   mediaAssetId    String?
+  imageUrl        String?
   sortOrder       Int      @default(0)
   isFeatured      Boolean  @default(true)
   requiresSize    Boolean  @default(false)

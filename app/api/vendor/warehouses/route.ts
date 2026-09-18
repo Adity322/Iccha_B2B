@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireVendor } from "@/lib/auth/guard";
+import { requireStaff, requireVendor } from "@/lib/auth/guard";
 
 const createWarehouseSchema = z.object({
     name: z.string().trim().min(1, "Warehouse name is required"),
@@ -11,32 +11,65 @@ const createWarehouseSchema = z.object({
     pincode: z.string().trim().optional().or(z.literal("")),
 });
 
+async function authenticateEither(request: NextRequest) {
+    const staffResult = await requireStaff(request);
+
+    if (!("error" in staffResult)) {
+        return { kind: "staff" as const, ...staffResult };
+    }
+
+    const vendorResult = await requireVendor(request);
+
+    if (!("error" in vendorResult)) {
+        return { kind: "vendor" as const, ...vendorResult };
+    }
+
+    return {
+        error: "Admin or vendor access required",
+        status: 401 as const,
+    };
+}
+
 export async function GET(request: NextRequest) {
     try {
-        const auth = await requireVendor(request);
+        const auth = await authenticateEither(request);
 
         if ("error" in auth) {
             return NextResponse.json(
                 { success: false, error: auth.error },
-                { status: 401 }
+                { status: auth.status }
             );
         }
 
+        // Each side only sees warehouses they own: vendors see their own,
+        // staff see the platform-owned pool (vendorId = null).
         const warehouses = await prisma.warehouse.findMany({
-            where: {
-                vendorId: auth.vendorProfile.id,
-            },
-            orderBy: {
-                createdAt: "desc",
-            },
+            where:
+                auth.kind === "vendor"
+                    ? { vendorId: auth.vendorProfile.id }
+                    : { vendorId: null },
+            orderBy: { createdAt: "desc" },
         });
 
-        return NextResponse.json({
-            success: true,
-            data: warehouses,
-        });
+        const data = warehouses.map((w) => ({
+            id: w.id,
+            name: w.name,
+            address: w.address,
+            city: w.city,
+            state: w.state,
+            pincode: w.pincode,
+            isActive: w.isActive,
+            createdAt: w.createdAt,
+            vendorId: w.vendorId,
+            vendorName: null as string | null,
+            // A caller may only delete/manage warehouses they themselves own:
+            // their own vendor profile, or (for staff) the platform pool.
+            isMine: true,
+        }));
+
+        return NextResponse.json({ success: true, data });
     } catch (error) {
-        console.error("Fetch vendor warehouses error:", error);
+        console.error("Fetch warehouses error:", error);
 
         return NextResponse.json(
             {
@@ -50,12 +83,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
-        const auth = await requireVendor(request);
+        const auth = await authenticateEither(request);
 
         if ("error" in auth) {
             return NextResponse.json(
                 { success: false, error: auth.error },
-                { status: 401 }
+                { status: auth.status }
             );
         }
 
@@ -77,7 +110,7 @@ export async function POST(request: NextRequest) {
 
         const warehouse = await prisma.warehouse.create({
             data: {
-                vendorId: auth.vendorProfile.id,
+                vendorId: auth.kind === "vendor" ? auth.vendorProfile.id : null,
                 name: data.name,
                 address: data.address || null,
                 city: data.city || null,
@@ -89,12 +122,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
             {
                 success: true,
-                data: warehouse,
+                data: {
+                    ...warehouse,
+                    vendorName: null,
+                    isMine: true,
+                },
             },
             { status: 201 }
         );
     } catch (error) {
-        console.error("Create vendor warehouse error:", error);
+        console.error("Create warehouse error:", error);
 
         return NextResponse.json(
             {

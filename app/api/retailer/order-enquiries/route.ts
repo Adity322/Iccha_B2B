@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRetailer } from "@/lib/auth/guard";
+import type { BillingEntity } from "@prisma/client";
 
 const FREE_SHIPPING_THRESHOLD = 20000;
 const FLAT_SHIPPING = 350;
@@ -60,6 +61,8 @@ export async function GET(request: NextRequest) {
         retailerGstin: true,
         retailerContact: true,
         retailerEmail: true,
+        billingAddressJson: true,
+        shippingAddressJson: true,
         totalDesigns: true,
         totalSets: true,
         totalPieces: true,
@@ -128,7 +131,14 @@ export async function GET(request: NextRequest) {
                 stateCode: true,
                 registeredAddress: true,
                 contactEmail: true,
-            contactPhone: true,
+                contactPhone: true,
+                bankName: true,
+                accountHolder: true,
+                accountNumber: true,
+                ifsc: true,
+                branch: true,
+                upiId: true,
+                invoicePrefix: true,
                 estimatePrefix: true,
                 defaultGstRate: true,
               },
@@ -144,6 +154,8 @@ export async function GET(request: NextRequest) {
       totalGst: Number(order.totalGst),
       shipping: Number(order.shipping),
       masterTotal: Number(order.masterTotal),
+      billingAddress: order.billingAddressJson ? JSON.parse(order.billingAddressJson) : null,
+      shippingAddress: order.shippingAddressJson ? JSON.parse(order.shippingAddressJson) : null,
       status: order.status.toLowerCase(),
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
@@ -230,10 +242,31 @@ export async function POST(request: NextRequest) {
               product: {
                 include: {
                   category: { select: { id: true, name: true, requiresSize: true } },
-                  vendor: { select: { id: true, businessName: true } },
-                  gstConfig: {
-                    include: { billingEntity: true },
+                  vendor: {
+                    select: {
+                      id: true,
+                      vendorCode: true,
+                      businessName: true,
+                      mobile: true,
+                      gstin: true,
+                      pan: true,
+                      address: true,
+                      city: true,
+                      state: true,
+                      stateCode: true,
+                      bankName: true,
+                      accountHolder: true,
+                      accountNumber: true,
+                      ifsc: true,
+                      branch: true,
+                      upiId: true,
+                      invoicePrefix: true,
+                      defaultGstRate: true,
+                      isActive: true,
+                      user: { select: { email: true } },
+                    },
                   },
+                  gstConfig: true,
                   media: {
                     where: { isPrimary: true },
                     take: 1,
@@ -287,10 +320,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Seller-owned GST billing. VendorProfile is the source of truth for vendor
+      // legal/GST details; IcchaStore-owned products use the platform entity.
+      const platformCode = process.env.PLATFORM_BILLING_ENTITY_CODE || "platform";
+      const platformEntity = await tx.billingEntity.findFirst({
+        where: { code: platformCode, isActive: true },
+      });
+
       const entityGroups = new Map<
         string,
         {
-          entity: NonNullable<typeof cart.items[number]["product"]["gstConfig"]>["billingEntity"];
+          entity: BillingEntity;
           subtotal: number;
           totalSets: number;
           totalPieces: number;
@@ -306,16 +346,83 @@ export async function POST(request: NextRequest) {
           throw new Error(`${product.name} is no longer available`);
         }
 
-        if (!product.gstConfig?.billingEntity) {
-          throw new Error(`${product.name} is missing its billing entity configuration`);
+        let entity: BillingEntity;
+
+        if (product.vendorId) {
+          const vendor = product.vendor;
+          if (!vendor) {
+            throw new Error(`${product.name} is linked to a vendor that could not be loaded`);
+          }
+
+          // Keep the normalized BillingEntity in sync, but never use a fixed
+          // Surat/Jaipur entity for a vendor. VendorProfile remains the source of truth.
+          entity = await tx.billingEntity.upsert({
+            where: { code: `vendor:${vendor.vendorCode}` },
+            update: {
+              legalName: vendor.businessName,
+              tradeName: vendor.businessName,
+              gstin: vendor.gstin,
+              pan: vendor.pan || "",
+              state: vendor.state,
+              stateCode: vendor.stateCode,
+              registeredAddress: [vendor.address, vendor.city, vendor.state]
+                .filter(Boolean)
+                .join(", "),
+              contactEmail: vendor.user.email,
+              contactPhone: vendor.mobile,
+              bankName: vendor.bankName || "",
+              accountHolder: vendor.accountHolder || "",
+              accountNumber: vendor.accountNumber || "",
+              ifsc: vendor.ifsc || "",
+              branch: vendor.branch || "",
+              upiId: vendor.upiId || null,
+              estimatePrefix: `EST-${vendor.vendorCode}-`,
+              invoicePrefix: vendor.invoicePrefix,
+              defaultGstRate: vendor.defaultGstRate,
+              isActive: vendor.isActive,
+            },
+            create: {
+              code: `vendor:${vendor.vendorCode}`,
+              legalName: vendor.businessName,
+              tradeName: vendor.businessName,
+              gstin: vendor.gstin,
+              pan: vendor.pan || "",
+              state: vendor.state,
+              stateCode: vendor.stateCode,
+              registeredAddress: [vendor.address, vendor.city, vendor.state]
+                .filter(Boolean)
+                .join(", "),
+              contactEmail: vendor.user.email,
+              contactPhone: vendor.mobile,
+              bankName: vendor.bankName || "",
+              accountHolder: vendor.accountHolder || "",
+              accountNumber: vendor.accountNumber || "",
+              ifsc: vendor.ifsc || "",
+              branch: vendor.branch || "",
+              upiId: vendor.upiId || null,
+              estimatePrefix: `EST-${vendor.vendorCode}-`,
+              invoicePrefix: vendor.invoicePrefix,
+              defaultGstRate: vendor.defaultGstRate,
+              isActive: vendor.isActive,
+            },
+          });
+        } else {
+          if (!platformEntity) {
+            throw new Error(
+              `Platform billing entity '${platformCode}' is not configured`
+            );
+          }
+          entity = platformEntity;
         }
 
-        const entity = product.gstConfig.billingEntity;
         const lineSubtotal = Number(product.wholesalePricePerSet) * item.sets;
         const isInterState = shippingAddress.stateCode !== entity.stateCode;
-        const gstRate = isInterState
-          ? Number(product.gstConfig.igstRate)
-          : Number(product.gstConfig.cgstRate) + Number(product.gstConfig.sgstRate);
+        const configuredGstRate = product.gstConfig
+          ? isInterState
+            ? Number(product.gstConfig.igstRate)
+            : Number(product.gstConfig.cgstRate) + Number(product.gstConfig.sgstRate)
+          : Number(entity.defaultGstRate);
+        const gstRate = configuredGstRate || Number(entity.defaultGstRate);
         const gstAmount = roundMoney((lineSubtotal * gstRate) / 100);
 
         const existing = entityGroups.get(entity.id);
@@ -440,11 +547,23 @@ export async function POST(request: NextRequest) {
 
       for (const item of cart.items) {
         const product = item.product;
-        const entity = product.gstConfig!.billingEntity;
+        const entityGroup = Array.from(entityGroups.values()).find((group) =>
+          product.vendorId
+            ? group.entity.code === `vendor:${product.vendor?.vendorCode}`
+            : group.entity.id === platformEntity?.id
+        );
+
+        if (!entityGroup) {
+          throw new Error(`${product.name} is missing seller billing configuration`);
+        }
+
+        const entity = entityGroup.entity;
         const isInterState = shippingAddress.stateCode !== entity.stateCode;
-        const gstRate = isInterState
-          ? Number(product.gstConfig!.igstRate)
-          : Number(product.gstConfig!.cgstRate) + Number(product.gstConfig!.sgstRate);
+        const gstRate = product.gstConfig
+          ? isInterState
+            ? Number(product.gstConfig.igstRate)
+            : Number(product.gstConfig.cgstRate) + Number(product.gstConfig.sgstRate)
+          : Number(entity.defaultGstRate);
         const lineSubtotal = Number(product.wholesalePricePerSet) * item.sets;
         const gstAmount = roundMoney((lineSubtotal * gstRate) / 100);
         const imageUrl = product.media[0]?.mediaAsset.publicUrl || null;

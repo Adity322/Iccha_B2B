@@ -85,6 +85,31 @@ export async function PATCH(
           upiId: data.upiId || null,
         },
       }),
+      prisma.billingEntity.create({
+        data: {
+          code: `vendor:VEN-${user.id}`,
+          legalName: rp.businessName,
+          tradeName: rp.businessName,
+          gstin: data.gstin,
+          pan: rp.pan || "",
+          state: data.state,
+          stateCode: data.stateCode,
+          registeredAddress: [data.address, data.city, data.state]
+            .filter(Boolean)
+            .join(", "),
+          contactEmail: user.email,
+          contactPhone: rp.mobile,
+          bankName: data.bankName || "",
+          accountHolder: data.accountHolder || "",
+          accountNumber: data.accountNumber || "",
+          ifsc: data.ifsc || "",
+          branch: data.branch || "",
+          upiId: data.upiId || null,
+          estimatePrefix: `EST-VEN-${user.id}-`,
+          invoicePrefix: "INV-VEN-",
+          defaultGstRate: 5.0,
+        },
+      }),
     ]);
 
     return NextResponse.json({ success: true, message: "User promoted to vendor" });

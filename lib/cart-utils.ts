@@ -9,10 +9,21 @@ const CART_ITEM_INCLUDE = {
                 take: 1,
                 include: { mediaAsset: { select: { publicUrl: true } } },
             },
-            vendor: { select: { businessName: true } },
-            gstConfig: {
-                include: { billingEntity: true },
+            vendor: {
+                select: {
+                    id: true,
+                    vendorCode: true,
+                    businessName: true,
+                    gstin: true,
+                    pan: true,
+                    address: true,
+                    city: true,
+                    state: true,
+                    stateCode: true,
+                    mobile: true,
+                },
             },
+            gstConfig: true,
             category: { select: { requiresSize: true } },
             sizes: { orderBy: { sortOrder: "asc" } },
         },
@@ -42,7 +53,6 @@ export async function getOrCreateCart(retailerProfileId: string): Promise<CartWi
 const DEFAULT_MOQ = { minSets: 4, minPieces: 4, minDesigns: 1, minOrderValue: 0 };
 const FREE_SHIPPING_THRESHOLD = 20000;
 const FLAT_SHIPPING = 350;
-const UNASSIGNED_ENTITY = "unassigned";
 
 // Field names below intentionally mirror the legacy mock `Cart`/`CartItem`/
 // `EntityCartSummary` shapes (lib/types) so existing cart UI components
@@ -58,7 +68,9 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
         const unitPrice = Number(p.wholesalePricePerPiece);
         const setPrice = Number(p.wholesalePricePerSet);
         const lineSubtotal = setPrice * item.sets;
-        const entityCode = p.gstConfig?.billingEntity?.code ?? UNASSIGNED_ENTITY;
+        const entityCode = p.vendor?.vendorCode
+            ? `vendor:${p.vendor.vendorCode}`
+            : (process.env.PLATFORM_BILLING_ENTITY_CODE || "platform");
 
         return {
             productId: item.productId,
@@ -100,14 +112,52 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
         orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
     });
 
-    const entityCodes = Array.from(new Set(rawItems.map((i) => i.billingEntityId)));
-    const realCodes = entityCodes.filter((c) => c !== UNASSIGNED_ENTITY);
-    const entities = realCodes.length
-        ? await prisma.billingEntity.findMany({ where: { code: { in: realCodes } } })
+    // Seller-owned GST: vendor products use the vendor's current legal/GST data.
+    // Only IcchaStore-owned products (vendorId = null) use the platform entity.
+    const platformCode = process.env.PLATFORM_BILLING_ENTITY_CODE || "platform";
+    const vendorIds = Array.from(
+        new Set(
+            cart.items
+                .map((item) => item.product.vendor?.id)
+                .filter((id): id is string => Boolean(id))
+        )
+    );
+
+    const vendorProfiles = vendorIds.length
+        ? await prisma.vendorProfile.findMany({
+            where: { id: { in: vendorIds } },
+            select: {
+                id: true,
+                vendorCode: true,
+                businessName: true,
+                gstin: true,
+                pan: true,
+                address: true,
+                city: true,
+                state: true,
+                stateCode: true,
+                mobile: true,
+            },
+        })
         : [];
 
-    const entitySummaries = entityCodes.map((entityId) => {
-        const entity = entities.find((e) => e.code === entityId) || null;
+    const platform = await prisma.billingEntity.findFirst({
+        where: { code: platformCode, isActive: true },
+        select: {
+            id: true,
+            code: true,
+            legalName: true,
+            tradeName: true,
+            gstin: true,
+            state: true,
+            stateCode: true,
+            registeredAddress: true,
+        },
+    });
+
+    const entitySummaries = Array.from(
+        new Set(rawItems.map((item) => item.billingEntityId))
+    ).map((entityId) => {
         const entItems = rawItems.filter((i) => i.billingEntityId === entityId);
         const entSets = entItems.reduce((s, i) => s + i.selectedSets, 0);
         const entPieces = entItems.reduce((s, i) => s + i.totalPieces, 0);
@@ -118,6 +168,28 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
         );
         const entShipping = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING;
 
+        const vendorCode = entityId.startsWith("vendor:")
+            ? entityId.slice("vendor:".length)
+            : null;
+        const vendor = vendorProfiles.find((v) => v.vendorCode === vendorCode);
+
+        const entity = vendor
+            ? {
+                id: vendor.id,
+                code: `vendor:${vendor.vendorCode}`,
+                legalName: vendor.businessName,
+                tradeName: vendor.businessName,
+                gstin: vendor.gstin,
+                state: vendor.state,
+                stateCode: vendor.stateCode,
+                registeredAddress: [vendor.address, vendor.city, vendor.state]
+                    .filter(Boolean)
+                    .join(", "),
+            }
+            : entityId === platformCode && platform
+                ? platform
+                : null;
+
         const isInterState = !!entity && !!address && address.stateCode !== entity.stateCode;
         const cgst = isInterState ? 0 : Math.round(entGst / 2);
         const sgst = isInterState ? 0 : Math.round(entGst / 2);
@@ -125,18 +197,7 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
 
         return {
             entityId,
-            entity: entity
-                ? {
-                    id: entity.id,
-                    code: entity.code,
-                    legalName: entity.legalName,
-                    tradeName: entity.tradeName,
-                    gstin: entity.gstin,
-                    state: entity.state,
-                    stateCode: entity.stateCode,
-                    registeredAddress: entity.registeredAddress,
-                }
-                : null,
+            entity,
             items: entItems,
             totalSets: entSets,
             totalPieces: entPieces,

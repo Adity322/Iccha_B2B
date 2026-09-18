@@ -13,6 +13,7 @@ import {
   Boxes,
   Sliders,
   ShoppingBag,
+  Store,
   ReceiptText,
   ExternalLink,
   UserCog,
@@ -36,6 +37,7 @@ const STAFF_ONLY_LINKS: NavLink[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Hero Banners', href: '/admin/hero', icon: Sparkles, badge: 'WebGL' },
   { label: 'Retailers', href: '/admin/retailers', icon: Users },
+  { label: 'Vendors', href: '/admin/vendors', icon: Store },
   { label: 'KYC Applications', href: '/admin/kyc', icon: FileCheck, badge: '2 Pending' },
   { label: 'Role Management', href: '/admin/roles', icon: UserCog },
 ];
