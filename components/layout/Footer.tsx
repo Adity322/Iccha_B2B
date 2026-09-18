@@ -13,7 +13,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { MOCK_CATEGORIES } from '@/lib/data/mockData';
-import Reveal from '@/components/ui/Reveal';
 
 export default function Footer() {
   const topCategories = MOCK_CATEGORIES.slice(0, 8);
@@ -29,7 +28,11 @@ export default function Footer() {
             { icon: Truck, title: 'Set-based assured dispatch', body: 'Standard wholesale set packing (M, L, XL, XXL) with full colorfastness test.' },
             { icon: FileText, title: 'Multi-entity GST billing', body: 'Compliant separate proforma estimates for Surat & Jaipur divisions.' },
           ].map(({ icon: Icon, title, body }, i) => (
-            <Reveal key={title} delay={i * 70} className="flex items-start gap-3.5">
+            <div
+              key={title}
+              className="reveal flex items-start gap-3.5"
+              style={{ '--reveal-delay': `${i * 70}ms` } as React.CSSProperties}
+            >
               <div className="p-2.5 rounded-[var(--radius-sm)] bg-white/5 text-stone-200 border border-white/10 shrink-0">
                 <Icon className="w-4.5 h-4.5" />
               </div>
@@ -37,7 +40,7 @@ export default function Footer() {
                 <h4 className="font-serif text-[15px] text-white mb-1">{title}</h4>
                 <p className="text-xs text-stone-400 leading-relaxed">{body}</p>
               </div>
-            </Reveal>
+            </div>
           ))}
         </div>
       </div>
@@ -46,7 +49,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
         
         {/* Brand Bio */}
-        <Reveal className="lg:col-span-2 space-y-4">
+        <div className="reveal lg:col-span-2 space-y-4">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-[var(--radius-sm)] bg-white text-[#1a1a1a] flex items-center justify-center font-serif text-xl font-bold">
               इ
@@ -73,10 +76,10 @@ export default function Footer() {
               Wholesale lot prices and commercial stock counts are strictly confidential and accessible only to approved KYC retailers.
             </p>
           </div>
-        </Reveal>
+        </div>
 
         {/* 20 Kurti Categories Column */}
-        <Reveal delay={60} className="space-y-3">
+        <div className="reveal space-y-3" style={{ '--reveal-delay': '60ms' } as React.CSSProperties}>
           <h4 className="font-medium text-white text-[13px]">
             Kurti categories
           </h4>
@@ -97,10 +100,10 @@ export default function Footer() {
               </Link>
             </li>
           </ul>
-        </Reveal>
+        </div>
 
         {/* Retailer Services */}
-        <Reveal delay={120} className="space-y-3">
+        <div className="reveal space-y-3" style={{ '--reveal-delay': '120ms' } as React.CSSProperties}>
           <h4 className="font-medium text-white text-[13px]">
             Retailer portal
           </h4>
@@ -136,10 +139,10 @@ export default function Footer() {
               </Link>
             </li>
           </ul>
-        </Reveal>
+        </div>
 
         {/* Operational Hubs & Contact */}
-        <Reveal delay={180} className="space-y-3">
+        <div className="reveal space-y-3" style={{ '--reveal-delay': '180ms' } as React.CSSProperties}>
           <h4 className="font-medium text-white text-[13px]">
             Manufacturing hubs
           </h4>
@@ -167,7 +170,7 @@ export default function Footer() {
               <span>wholesale@icchastore.com</span>
             </div>
           </div>
-        </Reveal>
+        </div>
 
       </div>
 
