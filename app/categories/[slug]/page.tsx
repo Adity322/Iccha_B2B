@@ -14,7 +14,8 @@ import {
 import PublicHeader from '@/components/layout/PublicHeader';
 import Footer from '@/components/layout/Footer';
 import PublicProductCard from '@/components/product/PublicProductCard';
-import { CategoryService, ProductService } from '@/lib/services';
+// import { CategoryService, ProductService } from '@/lib/services';
+import { PublicCatalogService } from '@/lib/services/publicCatalog';
 
 interface CategoryDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -22,13 +23,13 @@ interface CategoryDetailPageProps {
 
 export default async function CategoryDetailPage({ params }: CategoryDetailPageProps) {
   const { slug } = await params;
-  const category = await CategoryService.getCategoryBySlug(slug);
+  const category = await PublicCatalogService.getCategoryBySlug(slug);
 
   if (!category) {
     notFound();
   }
 
-  const products = await ProductService.getProducts({ categoryId: category.id });
+  const products = await PublicCatalogService.getProductsByCategory(category.id);
 
   return (
     <div className="flex flex-col min-h-screen">

@@ -13,9 +13,10 @@ import {
 import PublicHeader from '@/components/layout/PublicHeader';
 import Footer from '@/components/layout/Footer';
 import { CategoryService } from '@/lib/services';
+import { PublicCatalogService } from '@/lib/services/publicCatalog';
 
 export default async function CategoriesPage() {
-  const categories = await CategoryService.getCategories();
+  const categories = await PublicCatalogService.getCategories();
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -38,7 +39,7 @@ export default async function CategoriesPage() {
                 Wholesale Product Lines
               </span>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold text-stone-900">
-                20 Women&apos;s Kurti Categories
+                {categories.length} Women&apos;s Kurti Categories
               </h1>
               <p className="text-sm text-stone-600 leading-relaxed">
                 Browse our complete wholesale directory of stitched 2-piece and 3-piece kurti sets. All categories are manufactured in-house across our Surat and Jaipur production facilities.

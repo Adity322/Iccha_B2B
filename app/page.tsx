@@ -15,47 +15,51 @@ import Footer from '@/components/layout/Footer';
 import PublicProductCard from '@/components/product/PublicProductCard';
 import HeroSection from '@/components/hero/HeroSection';
 import RevealInit from '@/components/ui/RevealInit';
-import { ProductService, CategoryService } from '@/lib/services';
+import CategoryRail from '@/components/category/CategoryRail';
+// import { ProductService, CategoryService } from '@/lib/services';
+import { PublicCatalogService } from '@/lib/services/publicCatalog';
 
 /**
  * ────────────────────────────────────────────────────────────────────────
- * IcchaStore design tokens — hardcoded, single source of truth for the page.
- * No CSS variables: every section below pulls from this fixed palette so
- * the page reads as one consistent theme rather than a set of loosely
- * related sections.
+ * REDESIGN NOTES
  *
- *   ivory        #F5F0E6   page background
- *   ivory-deep   #ECE3D0   section banding / muted backgrounds
- *   surface      #FFFFFF   card bodies
- *   border       #E7DEC9   hairlines, card borders
- *   ink          #18140D   primary text, dark surfaces, CTA fill
- *   ink-soft     #F3ECDD   text on ink / dark sections
- *   muted        #746A5A   secondary text
- *   subtle       #A0937B   tertiary text, labels
- *   gold         #B3823C   minor accent ONLY — icons, one dot, hover states
- *   gold-deep    #D9AE68   accent on dark surfaces
+ * Palette is intentionally reduced to three values doing all the work:
+ *   black (#0a0a0a)  — dark sections, primary buttons, ink
+ *   white (#ffffff)  — light sections, cards, primary text-on-dark
+ *   stone grey scale — everything in between (borders, muted copy, tiers)
+ * No hue anywhere. Hierarchy comes from weight, spacing and grey value,
+ * not colour-coding — so this page no longer depends on the old
+ * --brand-accent / --brand-secondary / --brand-accent-wine tokens.
+ *
+ * The two editorial sections (craft moment + factory video) now bleed
+ * their photography edge-to-edge as a true background panel with a
+ * vignette, rather than sitting in a rounded, bordered box — copy lives
+ * in a solid black panel beside it. The "retailer access" panel is
+ * styled like a garment hang-tag (notch + thread hole) since that's a
+ * real physical object in this business, not a generic floating card.
+ *
+ * The three-up benefit section drops the identical-rounded-card treatment
+ * for a flat, spec-sheet style grid (sharp corners, hairline rules) that
+ * reads closer to a cutting ticket than a SaaS pricing table.
  * ────────────────────────────────────────────────────────────────────────
  */
 
-function StepMarker({ index, label }: { index: string; label: string }) {
-  return (
-    <div className="reveal flex items-center gap-4 mb-5">
-      <span className="font-serif text-base text-[#A0937B] tabular-nums">
-        {index}
-      </span>
-      <span className="h-px flex-1 bg-[#E7DEC9]" />
-      <span className="text-[13px] text-[#A0937B]">{label}</span>
-    </div>
-  );
-}
+const btnFill =
+  'inline-flex items-center justify-center gap-2 rounded-full bg-black text-white px-8 py-3.5 text-sm font-medium tracking-wide transition-colors duration-200 hover:bg-neutral-800';
+const btnOutline =
+  'inline-flex items-center justify-center gap-2 rounded-full border border-black text-black px-8 py-3.5 text-sm font-medium tracking-wide transition-colors duration-200 hover:bg-black hover:text-white';
+const btnOnDark =
+  'inline-flex items-center justify-center gap-2 rounded-full border border-white/40 text-white px-6 py-3.5 text-sm font-medium tracking-wide transition-colors duration-200 hover:bg-white hover:text-black hover:border-white';
 
 export default async function HomePage() {
-  const representativeProducts = await ProductService.getPublicRepresentativeProducts(8);
-  const categories = await CategoryService.getCategories();
+  // const representativeProducts = await ProductService.getPublicRepresentativeProducts(8);
+  // const categories = await CategoryService.getCategories();
+  const representativeProducts = await PublicCatalogService.getRepresentativeProducts(8);
+  const categories = await PublicCatalogService.getCategories();
   const featuredCategories = categories.slice(0, 8);
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F5F0E6]">
+    <div className="flex flex-col min-h-screen bg-white">
       <RevealInit />
       <PublicHeader />
 
@@ -64,196 +68,150 @@ export default async function HomePage() {
         {/* ========================================================================= */}
         {/* 1. HERO SECTION — left untouched */}
         {/* ========================================================================= */}
-        <HeroSection />
+        {/* <HeroSection /> */}
 
         {/* ========================================================================= */}
-        {/* 2. CATEGORY DISCOVERY — same card language as the product grids below */}
+        {/* 2. CATEGORY DISCOVERY */}
         {/* ========================================================================= */}
-        <section className="py-24 sm:py-32 bg-[#F5F0E6]">
+        <section className="py-24 sm:py-32 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-            <StepMarker index="01" label={`${categories.length} styles`} />
-
-            <div className="reveal flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
-              <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-[#18140D] tracking-tight leading-[1.05] max-w-xl">
+            <div className="reveal flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
+              <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-black tracking-tight leading-[1.05] max-w-xl">
                 Every category we manufacture
               </h2>
 
               <Link
                 href="/categories"
-                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-[#18140D] group pb-0.5 border-b border-[#18140D] transition-opacity duration-200 ease-out hover:opacity-60 shrink-0"
+                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-black group pb-0.5 border-b border-black transition-opacity duration-200 ease-out hover:opacity-60 shrink-0"
               >
                 <span>View full catalogue</span>
                 <ChevronRight className="w-4 h-4 transform transition-transform duration-200 ease-out group-hover:translate-x-1" />
               </Link>
             </div>
 
-            {/* Category Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-              {featuredCategories.map((category, i) => (
-                <div
-                  key={category.id}
-                  className="reveal"
-                  style={{ '--reveal-delay': `${(i % 4) * 70}ms` } as React.CSSProperties}
-                >
-                  <Link
-                    href={`/categories/${category.slug}`}
-                    className="group flex flex-col h-full rounded-[26px] bg-white border border-[#E7DEC9] overflow-hidden shadow-[0_1px_2px_rgba(24,20,13,0.05)] transition-all duration-300 hover:shadow-[0_24px_48px_-24px_rgba(24,20,13,0.35)] hover:-translate-y-0.5"
-                  >
-                    <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#ECE3D0]">
-                      <Image
-                        src={category.image}
-                        alt={category.name}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                        className="object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
-                        referrerPolicy="no-referrer"
-                      />
-                      <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-[#18140D] text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#B3823C]" />
-                        {category.subcategories[0]}
-                      </span>
-                    </div>
+            <p className="reveal text-[15px] text-neutral-500 leading-relaxed max-w-xl mb-16">
+              {categories.length} styles, cut and stitched across our Surat and Jaipur units — from
+              festive 3-piece sets to everyday cambric cotton.
+            </p>
 
-                    <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between gap-4">
-                      <h3 className="font-serif text-[17px] font-medium text-[#18140D] leading-snug">
-                        {category.name}
-                      </h3>
-                      <span className="inline-flex items-center justify-center gap-1.5 w-full bg-[#18140D] group-hover:bg-[#2A2318] text-[#F3ECDD] text-[11px] font-semibold uppercase tracking-[0.14em] px-4 py-3 rounded-full transition-colors">
-                        Browse designs
-                        <ArrowRight className="w-3.5 h-3.5 text-[#D9AE68]" />
-                      </span>
-                    </div>
-                  </Link>
-                </div>
-              ))}
+            {/* Category rail — hover/focus opens a strip on desktop, 2-up tiles on mobile */}
+            <div className="reveal">
+              <CategoryRail categories={featuredCategories} />
             </div>
 
           </div>
         </section>
 
         {/* ========================================================================= */}
-        {/* 3. CRAFT MOMENT — editorial image + verification panel */}
+        {/* 3. CRAFT MOMENT — full-bleed vignette photo + hang-tag verification panel */}
         {/* ========================================================================= */}
-        <section className="relative overflow-hidden bg-[#14110C] text-[#F3ECDD] border-y border-black/20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-32">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-stretch">
+        <section className="relative bg-black text-white border-y border-white/10">
 
-              {/* Editorial copy */}
-              <div className="reveal lg:col-span-5 flex flex-col justify-between min-h-[520px]">
-                <div>
-                  <div className="flex items-center gap-4 mb-8">
-                    <span className="font-serif text-base text-[#A0937B] tabular-nums">02</span>
-                    <span className="h-px flex-1 bg-white/10" />
-                    <span className="text-[12px] uppercase tracking-[0.18em] text-[#A0937B]">
-                      Craft moment
-                    </span>
-                  </div>
+          {/* Full-bleed photo hero: image IS the background, copy sits on top of it */}
+          <div className="relative min-h-[640px] sm:min-h-[720px]">
+            <Image
+              src="https://images.unsplash.com/photo-1551803091-e20673f15770?w=1800&auto=format&fit=crop&q=85"
+              alt="Fabric and stitch detail from an IcchaStore production lot"
+              fill
+              sizes="100vw"
+              className="object-cover object-[center_30%] grayscale-[15%]"
+              referrerPolicy="no-referrer"
+            />
+            {/* Left-to-right + bottom fades so copy stays legible against the photo */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/55 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/5 to-transparent" />
+            <div className="absolute inset-0 shadow-[inset_0_0_14vw_4vw_rgba(0,0,0,0.55)]" />
 
-                  <h2 className="font-serif text-5xl sm:text-6xl lg:text-7xl font-normal leading-[0.98] tracking-tight max-w-xl">
-                    Woven to
-                    <br />
-                    outlast the
-                    <br />
-                    season.
-                  </h2>
+            <div className="absolute top-6 left-4 sm:left-10">
+              <span className="inline-flex items-center gap-2 rounded-full bg-black/50 backdrop-blur-md border border-white/15 px-3.5 py-2 text-[11px] font-medium text-white/85">
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                Surat unit, cutting floor
+              </span>
+            </div>
 
-                  <p className="mt-8 max-w-md text-[15px] sm:text-base text-[#F3ECDD]/65 leading-relaxed">
-                    Thoughtful fabric selection, controlled finishing, and careful inspection
-                    turn every production lot into something retailers can confidently put on
-                    the floor.
-                  </p>
-                </div>
+            <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-56 sm:pb-16">
+              <div className="max-w-xl">
+                <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-7xl font-normal leading-[0.98] tracking-tight">
+                  Woven to
+                  <br />
+                  outlast the
+                  <br />
+                  season.
+                </h2>
 
-                <div className="mt-12 grid grid-cols-2 gap-4 max-w-md">
-                  <div className="border-t border-white/10 pt-4">
-                    <span className="block font-serif text-2xl text-[#F3ECDD]">01</span>
-                    <span className="block mt-1 text-[11px] uppercase tracking-[0.14em] text-[#A0937B]">
+                <p
+                  className="reveal mt-8 max-w-md text-[15px] sm:text-base text-white/70 leading-relaxed"
+                  style={{ '--reveal-delay': '80ms' } as React.CSSProperties}
+                >
+                  Thoughtful fabric selection, controlled finishing, and careful inspection
+                  turn every production lot into something retailers can confidently put on
+                  the floor.
+                </p>
+
+                <div
+                  className="reveal grid grid-cols-2 gap-4 max-w-md mt-12"
+                  style={{ '--reveal-delay': '140ms' } as React.CSSProperties}
+                >
+                  <div className="border-t-2 border-white pt-4">
+                    <span className="block font-serif text-2xl text-white">01</span>
+                    <span className="block mt-1 text-[13px] text-white/60">
                       Fabric selection
                     </span>
                   </div>
-                  <div className="border-t border-white/10 pt-4">
-                    <span className="block font-serif text-2xl text-[#F3ECDD]">02</span>
-                    <span className="block mt-1 text-[11px] uppercase tracking-[0.14em] text-[#A0937B]">
+                  <div className="border-t-2 border-white/40 pt-4">
+                    <span className="block font-serif text-2xl text-white">02</span>
+                    <span className="block mt-1 text-[13px] text-white/60">
                       Finish inspection
                     </span>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Image + floating access card */}
-              <div
-                className="reveal lg:col-span-7 relative"
-                style={{ '--reveal-delay': '120ms' } as React.CSSProperties}
-              >
-                <div className="relative min-h-[520px] h-full overflow-hidden rounded-[30px] border border-white/10 bg-[#1c1914]">
-                  <Image
-                    src="https://images.unsplash.com/photo-1551803091-e20673f15770?w=1800&auto=format&fit=crop&q=85"
-                    alt="Fabric and stitch detail from an IcchaStore production lot"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 58vw"
-                    className="object-cover object-center transition-transform duration-700 ease-out hover:scale-[1.02]"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/20" />
+            {/* Hang-tag style verification card, floating over the photo */}
+            <div className="absolute inset-x-4 bottom-6 sm:inset-x-auto sm:right-10 sm:bottom-10 z-10">
+              <div className="relative max-w-sm ml-auto rounded-md bg-white text-black p-6 sm:p-7 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.7)]">
+                {/* thread hole, top-left, like a physical swing tag */}
+                {/* <span className="absolute -top-3 left-6 w-4 h-4 rounded-full bg-black border-4 border-white" /> */}
+                {/* <span className="absolute -top-6 left-[34px] w-px h-4 bg-neutral-400" /> */}
 
-                  <div className="absolute top-5 left-5 right-5 flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-black/45 backdrop-blur-md border border-white/10 px-3.5 py-2 text-[11px] font-medium text-white/85">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#D9AE68]" />
-                      Production detail
-                    </span>
-                    <span className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-white/55">
-                      IcchaStore / Archive
-                    </span>
-                  </div>
-
-                  <div className="absolute inset-x-5 bottom-5 sm:inset-x-6 sm:bottom-6">
-                    <div className="max-w-md rounded-[24px] bg-[#F5F0E6] text-[#18140D] p-5 sm:p-6 shadow-[0_24px_60px_-18px_rgba(0,0,0,0.6)]">
-                      <div className="flex items-center justify-between gap-4 mb-4">
-                        <span className="inline-flex items-center gap-1.5 bg-white/70 text-[#746A5A] text-[10px] font-semibold uppercase tracking-[0.12em] px-3 py-1.5 rounded-full">
-                          <Lock className="w-3 h-3 text-[#B3823C]" />
-                          Retailer access
-                        </span>
-                        <span className="font-serif text-sm text-[#A0937B]">B2B</span>
-                      </div>
-
-                      <h3 className="font-serif text-2xl sm:text-3xl font-medium leading-tight mb-2">
-                        See the commercial side.
-                      </h3>
-
-                      <p className="text-[13px] sm:text-[14px] text-[#746A5A] leading-relaxed mb-5 max-w-sm">
-                        Wholesale rates, live stock, and size ratios unlock once your GSTIN is verified.
-                      </p>
-
-                      <Link
-                        href="/register"
-                        className="inline-flex items-center justify-center gap-2 w-full bg-[#18140D] hover:bg-[#2A2318] text-[#F3ECDD] text-[11px] sm:text-[12px] font-semibold uppercase tracking-[0.14em] px-5 py-3.5 rounded-full transition-colors"
-                      >
-                        Apply for verification
-                        <ArrowRight className="w-3.5 h-3.5 text-[#D9AE68]" />
-                      </Link>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-1.5 mb-4">
+                  <Lock className="w-3.5 h-3.5 text-black" />
+                  <span className="text-[11px] font-semibold text-neutral-500">
+                    Retailer access
+                  </span>
                 </div>
-              </div>
 
+                <h3 className="font-serif text-2xl sm:text-3xl font-medium leading-tight mb-2">
+                  See the commercial side.
+                </h3>
+
+                <p className="text-[13px] sm:text-[14px] text-neutral-500 leading-relaxed mb-5 max-w-sm">
+                  Wholesale rates, live stock, and size ratios unlock once your GSTIN is verified.
+                </p>
+
+                <Link href="/register" className={`${btnFill} w-full`}>
+                  Apply for verification
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
           </div>
+
         </section>
 
         {/* ========================================================================= */}
         {/* 4. REPRESENTATIVE COLLECTION (Sensitive B2B info hidden) */}
         {/* ========================================================================= */}
-        <section className="py-24 sm:py-32 bg-[#ECE3D0] border-t border-[#E7DEC9]">
+        <section className="py-24 sm:py-32 bg-neutral-50 border-t border-neutral-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-            <StepMarker index="02" label="Sample lot" />
-
             <div className="reveal mb-16 max-w-2xl">
-              <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-[#18140D] tracking-tight leading-[1.05] mb-4">
+              <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-black tracking-tight leading-[1.05] mb-4">
                 A sample of what we make
               </h2>
-              <p className="text-[15px] text-[#746A5A] leading-relaxed">
+              <p className="text-[15px] text-neutral-500 leading-relaxed">
                 These pieces show our fabric cuts, embellishments, and stitching finishes.
                 Wholesale rates, live stock, and size ratios unlock once your business is verified.
               </p>
@@ -276,34 +234,35 @@ export default async function HomePage() {
         </section>
 
         {/* ========================================================================= */}
-        {/* 5. WHY RETAILERS CHOOSE ICCHASTORE — recast as cards, matching theme */}
+        {/* 5. WHY RETAILERS CHOOSE ICCHASTORE — flat spec-sheet grid, no card kit */}
         {/* ========================================================================= */}
-        <section className="py-24 sm:py-32 bg-[#F5F0E6] border-t border-[#E7DEC9]">
+        <section className="py-24 sm:py-32 bg-white border-t border-neutral-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-            <StepMarker index="03" label="Why retailers stay" />
-
-            <h2 className="reveal font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-[#18140D] tracking-tight leading-[1.05] max-w-3xl mb-16">
+            <h2 className="reveal font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-black tracking-tight leading-[1.05] max-w-3xl mb-16">
               Built for margin, not just volume
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 border-t border-l border-neutral-200">
 
               {[
                 {
                   icon: Scissors,
+                  tier: 'border-t-black',
                   title: 'Organized set lots',
                   body:
                     'Every design is packed in standard, market-tested size combinations — M-38, L-40, XL-42, XXL-44 — so shelves rotate without dead sizes.',
                 },
                 {
                   icon: Building2,
+                  tier: 'border-t-neutral-500',
                   title: 'Two GST entities, one order',
                   body:
                     'Direct billing from Surat (Chanderi, muslin and festive silk 3-piece sets) and Jaipur (60x60 cambric cotton, hand-block and 2-piece sets) for clean input tax credit.',
                 },
                 {
                   icon: Lock,
+                  tier: 'border-t-neutral-300',
                   title: 'Wholesale rates stay private',
                   body:
                     'Your retail customers never see our margins or supplier prices. Commercial access is gated behind verified KYC, every time.',
@@ -311,16 +270,16 @@ export default async function HomePage() {
               ].map((item, idx) => (
                 <div
                   key={item.title}
-                  className="reveal rounded-[26px] bg-white border border-[#E7DEC9] p-7 sm:p-8 shadow-[0_1px_2px_rgba(24,20,13,0.05)] transition-shadow duration-300 hover:shadow-[0_24px_48px_-24px_rgba(24,20,13,0.35)]"
+                  className={`reveal group border-r border-b border-neutral-200 border-t-2 ${item.tier} p-8 sm:p-10 transition-colors duration-200 hover:bg-neutral-50`}
                   style={{ '--reveal-delay': `${idx * 100}ms` } as React.CSSProperties}
                 >
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#F5F0E6] mb-6">
-                    <item.icon className="w-4.5 h-4.5 text-[#B3823C]" />
+                  <div className="flex items-center gap-3 mb-6">
+                    <item.icon className="w-5 h-5 text-black" strokeWidth={1.75} />
+                    <h3 className="font-serif text-xl font-medium text-black">
+                      {item.title}
+                    </h3>
                   </div>
-                  <h3 className="font-serif text-xl font-medium text-[#18140D] mb-2.5">
-                    {item.title}
-                  </h3>
-                  <p className="text-[15px] text-[#746A5A] leading-relaxed">
+                  <p className="text-[15px] text-neutral-500 leading-relaxed">
                     {item.body}
                   </p>
                 </div>
@@ -334,87 +293,90 @@ export default async function HomePage() {
         {/* ========================================================================= */}
         {/* 6. CRAFT, FACTORY VIDEO & REELS */}
         {/* ========================================================================= */}
-        <section className="py-24 sm:py-32 bg-[#14110C] text-[#F3ECDD] overflow-hidden border-t border-black/30">
+        <section className="relative bg-black text-white overflow-hidden border-t border-white/10">
 
-          {/* Giant edge-to-edge type banner */}
-          <div className="px-4 sm:px-6 lg:px-8 mb-16 sm:mb-20">
-            <div className="max-w-7xl mx-auto">
-              <span className="reveal block text-[13px] text-[#F3ECDD]/60 mb-4">04 — Finishing</span>
-              <h2 className="reveal font-serif text-6xl sm:text-7xl lg:text-8xl font-normal text-[#F3ECDD] tracking-tight leading-[0.95]">
-                Stitched.
-                <br />
-                Inspected. Shipped.
-              </h2>
-            </div>
-          </div>
+          {/* Full-bleed photo hero: image IS the background, copy + CTA sit on top of it */}
+          <div className="relative min-h-[600px] sm:min-h-[680px] flex items-end">
+            <Image
+              src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=1800&auto=format&fit=crop&q=85"
+              alt="IcchaStore kurti production and craft"
+              fill
+              sizes="100vw"
+              className="object-cover object-[center_25%] grayscale-[15%]"
+              referrerPolicy="no-referrer"
+            />
+            {/* Left-to-right + bottom fades so copy stays legible against the photo */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/55 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+            <div className="absolute inset-0 shadow-[inset_0_0_14vw_4vw_rgba(0,0,0,0.55)]" />
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-              <div className="reveal lg:col-span-5 space-y-6" style={{ '--reveal-delay': '0ms' } as React.CSSProperties}>
-                <p className="text-[15px] text-[#F3ECDD]/80 leading-relaxed">
+            <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
+              <div className="max-w-xl">
+                <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-7xl font-normal text-white tracking-tight leading-[0.98] mb-6">
+                  Stitched.
+                  <br />
+                  Inspected. Shipped.
+                </h2>
+
+                <p
+                  className="reveal text-[15px] text-white/70 leading-relaxed"
+                  style={{ '--reveal-delay': '80ms' } as React.CSSProperties}
+                >
                   Watch how every kurti lot goes through 4-point fabric inspection,
                   lock-stitch reinforcement, interlock seam overcasting, and pressing
                   before packing.
                 </p>
 
-                <div className="space-y-3 text-[15px] text-[#F3ECDD] border-t border-white/10 pt-5">
+                <div
+                  className="reveal space-y-3 text-[15px] text-white border-t border-white/15 mt-6 pt-5"
+                  style={{ '--reveal-delay': '140ms' } as React.CSSProperties}
+                >
                   <div className="flex items-start gap-2.5">
-                    <span className="w-1 h-1 rounded-full bg-[#D9AE68] shrink-0 mt-2" />
+                    <span className="w-1 h-1 rounded-full bg-white shrink-0 mt-2" />
                     <span>Liva-certified heavy 14kg rayon and 60x60 cambric cotton</span>
                   </div>
                   <div className="flex items-start gap-2.5">
-                    <span className="w-1 h-1 rounded-full bg-[#D9AE68] shrink-0 mt-2" />
+                    <span className="w-1 h-1 rounded-full bg-white/60 shrink-0 mt-2" />
                     <span>Original zari weaving and pure organza cutwork embroidery</span>
                   </div>
                   <div className="flex items-start gap-2.5">
-                    <span className="w-1 h-1 rounded-full bg-[#D9AE68] shrink-0 mt-2" />
+                    <span className="w-1 h-1 rounded-full bg-white/30 shrink-0 mt-2" />
                     <span>Guaranteed colorfastness and zero shrinkage stitching allowance</span>
                   </div>
                 </div>
 
-                <div className="pt-2">
-                  <Link
-                    href="/videos"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#F3ECDD]/25 hover:border-[#F3ECDD]/60 text-[#F3ECDD] text-[13px] font-semibold uppercase tracking-[0.12em] px-6 py-3.5 transition-colors"
-                  >
-                    <span>Watch factory videos</span>
+                <div
+                  className="reveal flex flex-wrap items-center gap-5 mt-8"
+                  style={{ '--reveal-delay': '200ms' } as React.CSSProperties}
+                >
+                  <Link href="/videos" className={btnOnDark}>
+                    Watch factory videos
+                  </Link>
+
+                  <Link href="/videos" className="inline-flex items-center gap-3 group">
+                    <span className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shrink-0 transition-transform duration-200 ease-out group-hover:scale-110">
+                      <Play className="w-4 h-4 fill-black translate-x-0.5" />
+                    </span>
+                    <span className="text-[13px] text-white/70 group-hover:text-white transition-colors duration-200">
+                      Surat facility —
+                      <br />
+                      3-piece festive set inspection
+                    </span>
                   </Link>
                 </div>
               </div>
-
-              {/* Video Preview Graphic */}
-              <div className="reveal lg:col-span-7" style={{ '--reveal-delay': '120ms' } as React.CSSProperties}>
-                <Link href="/videos" className="relative aspect-video overflow-hidden rounded-[26px] bg-[#1c1a16] border border-white/10 group block">
-                  <Image
-                    src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=1200&auto=format&fit=crop&q=80"
-                    alt="IcchaStore kurti production and craft"
-                    fill
-                    className="object-cover opacity-60 transition-opacity duration-300 ease-out group-hover:opacity-75"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/25 group-hover:bg-black/35 transition-colors duration-300 ease-out flex flex-col items-center justify-center gap-3">
-                    <div className="w-16 h-16 rounded-full bg-white text-[#18140D] flex items-center justify-center transform transition-transform duration-300 ease-out group-hover:scale-110">
-                      <Play className="w-6 h-6 fill-[#18140D] translate-x-0.5" />
-                    </div>
-                    <span className="text-sm font-semibold text-white/90">
-                      Watch factory videos
-                    </span>
-                  </div>
-                  <div className="absolute bottom-4 left-4 bg-black/60 rounded-full px-4 py-1.5 text-sm text-[#F3ECDD]">
-                    Surat facility — 3-piece festive set inspection
-                  </div>
-                </Link>
-              </div>
             </div>
+          </div>
 
-            {/* Instagram / Lookbooks Gallery Strip */}
-            <div className="mt-20 pt-12 border-t border-white/10">
+          {/* Instagram / Lookbooks Gallery Strip */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+            <div className="pt-12 border-t border-white/10">
               <div className="reveal flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <Instagram className="w-4 h-4 text-[#D9AE68]" />
-                  <span className="font-serif text-lg text-[#F3ECDD]">Recent lookbooks</span>
+                  <Instagram className="w-4 h-4 text-white/70" />
+                  <span className="font-serif text-lg text-white">Recent lookbooks</span>
                 </div>
-                <span className="text-sm text-[#F3ECDD]/60">@icchastore.official</span>
+                <span className="text-sm text-white/50">@icchastore.official</span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -426,67 +388,61 @@ export default async function HomePage() {
                 ].map((reel, idx) => (
                   <div
                     key={idx}
-                    className="reveal relative aspect-[9/16] overflow-hidden rounded-2xl bg-[#1a1712] border border-white/10 group"
+                    className="reveal relative aspect-[9/16] overflow-hidden bg-white/5 border border-white/10 group"
                     style={{ '--reveal-delay': `${idx * 70}ms` } as React.CSSProperties}
                   >
                     <Image
                       src={reel.img}
                       alt={reel.tag}
                       fill
-                      className="object-cover transition-opacity duration-300 ease-out opacity-80 group-hover:opacity-100"
+                      className="object-cover grayscale transition-all duration-300 ease-out opacity-70 group-hover:opacity-100 group-hover:grayscale-0"
                       referrerPolicy="no-referrer"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <div className="absolute bottom-3 left-3 text-sm font-medium text-white/90">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
+                    <div className="absolute bottom-3 left-3 text-sm font-medium text-white">
                       {reel.tag}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-
           </div>
+
         </section>
 
         {/* ========================================================================= */}
         {/* 7. RETAILER REGISTRATION CTA */}
         {/* ========================================================================= */}
-        <section className="py-28 sm:py-36 bg-[#F5F0E6] border-t border-[#E7DEC9]">
+        <section className="py-28 sm:py-36 bg-white border-t border-neutral-200">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
 
-            <div className="reveal w-11 h-11 rounded-full bg-[#18140D] text-[#F3ECDD] flex items-center justify-center font-serif text-xl mx-auto mb-8">
+            <div className="reveal w-11 h-11 rounded-full bg-black text-white flex items-center justify-center font-serif text-xl mx-auto mb-8">
               इ
             </div>
 
-            <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-7xl font-normal text-[#18140D] tracking-tight leading-[1.02] mb-6">
+            <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-7xl font-normal text-black tracking-tight leading-[1.02] mb-6">
               Ready to stock
               <br />
               curated kurti sets?
             </h2>
 
-            <p className="reveal text-base text-[#746A5A] max-w-lg mx-auto leading-relaxed mb-10">
+            <p className="reveal text-base text-neutral-500 max-w-lg mx-auto leading-relaxed mb-10">
               Join boutique owners and garment retailers across India already sourcing
               from us. Submit your GSTIN for prompt access.
             </p>
 
             <div className="reveal flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
-              <Link
-                href="/register"
-                className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto rounded-full bg-[#18140D] hover:bg-[#2A2318] text-[#F3ECDD] text-[13px] font-semibold uppercase tracking-[0.12em] px-8 py-3.5 transition-colors"
-              >
-                <span>Apply as a retailer</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#D9AE68]" />
+              <Link href="/register" className={`${btnFill} w-full sm:w-auto`}>
+                Apply as a retailer
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
 
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center w-full sm:w-auto rounded-full border border-[#18140D]/25 hover:border-[#18140D] text-[#18140D] text-[13px] font-semibold uppercase tracking-[0.12em] px-8 py-3.5 transition-colors"
-              >
+              <Link href="/login" className={`${btnOutline} w-full sm:w-auto`}>
                 Retailer login
               </Link>
             </div>
 
-            <p className="reveal text-sm text-[#A0937B]">
+            <p className="reveal text-sm text-neutral-400">
               Registration requires a GSTIN or valid Shop and Establishment proof.
               Verification takes about 24 business hours.
             </p>

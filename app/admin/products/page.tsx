@@ -11,7 +11,8 @@ import {
   Save,
   Building2,
   ChevronLeft,
-  Loader2
+  Loader2,
+  QrCode
 } from 'lucide-react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { useApp } from '@/lib/context/AppContext';
@@ -111,6 +112,11 @@ export default function AdminProductsPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+
+  const [qrMediaAssets, setQrMediaAssets] = useState<{ id: string; url: string }[]>([]);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrToken, setQrToken] = useState<string | null>(null);
+
   const [uploading, setUploading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -325,8 +331,64 @@ export default function AdminProductsPage() {
     setStockAddition(0);
     setSizeStockAdditions([]);
     setImageFiles([]);
+    setQrMediaAssets([]);
     setIsModalOpen(true);
   };
+
+  // --- QR "scan to upload" flow ---
+  const openQrUpload = async () => {
+    try {
+      const body = selectedVendor ? { vendorId: selectedVendor.id } : {};
+      const res = await fetch('/api/admin/products/upload-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setQrToken(json.data.token);
+        setQrModalOpen(true);
+      } else {
+        addToast({ type: 'error', title: 'Could not start QR upload', message: json.error });
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Network error', message: 'Could not start QR upload.' });
+    }
+  };
+
+  // Poll every 3s while the QR modal is open — the moment the phone finishes
+  // uploading, pull the photo + the vendor's default warehouse straight in.
+  useEffect(() => {
+    if (!qrModalOpen || !qrToken) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/admin/products/upload-session?token=${qrToken}`);
+        const json = await res.json();
+        if (!json.success) return;
+
+        if (json.data.status === 'uploaded' && json.data.mediaAsset) {
+          setQrMediaAssets(prev => [...prev, { id: json.data.mediaAsset.id, url: json.data.mediaAsset.publicUrl }]);
+          setFormData(prev => ({
+            ...prev,
+            sku: prev.sku || `IC-${(json.data.vendor?.vendorCode || 'GEN')}-${Math.floor(1000 + Math.random() * 9000)}`,
+            warehouseId: prev.warehouseId || json.data.warehouse?.id || prev.warehouseId,
+          }));
+          addToast({ type: 'success', title: 'Photo received', message: 'Uploaded from phone — form updated automatically.' });
+          setQrModalOpen(false);
+          setQrToken(null);
+        } else if (json.data.status === 'expired') {
+          addToast({ type: 'error', title: 'QR code expired', message: 'Please generate a new one.' });
+          setQrModalOpen(false);
+          setQrToken(null);
+        }
+      } catch {
+        // network hiccup — silently retry on the next tick
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [qrModalOpen, qrToken, addToast]);
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -415,7 +477,7 @@ export default function AdminProductsPage() {
       return;
     }
 
-    if (!editingProduct && imageFiles.length < 2) {
+    if (!editingProduct && imageFiles.length + qrMediaAssets.length < 2) {
       addToast({
         type: 'error',
         title: 'More photos needed',
@@ -424,7 +486,7 @@ export default function AdminProductsPage() {
       return;
     }
 
-    const mediaAssetIds: string[] = [];
+    const mediaAssetIds: string[] = [...qrMediaAssets.map(m => m.id)];
 
     if (imageFiles.length > 0) {
       setUploading(true);
@@ -574,6 +636,7 @@ export default function AdminProductsPage() {
       (product.sizes || []).map(s => ({ size: s.size, availableSets: 0 }))
     );
     setImageFiles([]);
+    setQrMediaAssets([]);
     setIsModalOpen(true);
   };
 
@@ -925,6 +988,8 @@ export default function AdminProductsPage() {
                 <button type="button" onClick={() => {
                      setIsModalOpen(false);
                      setEditingProduct(null);
+                     setQrModalOpen(false);
+                     setQrToken(null)
                    }} className="text-stone-400 font-bold text-sm">
                   &times; Close
                 </button>
@@ -943,7 +1008,14 @@ export default function AdminProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-800 mb-1">Product Photos {editingProduct ? '(optional while editing)' : '* (minimum 2)'}</label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="block font-bold text-stone-800">Product Photos {editingProduct ? '(optional while editing)' : '* (minimum 2)'}</label>
+                    <button type="button" onClick={openQrUpload}
+                      className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-rose-900 border border-rose-200 bg-rose-50 hover:bg-rose-100 rounded-lg px-2.5 py-1.5 transition">
+                      <QrCode className="w-3.5 h-3.5" />
+                      Scan to upload from phone
+                    </button>
+                  </div>
                   <input
                     type="file"
                     multiple
@@ -951,21 +1023,34 @@ export default function AdminProductsPage() {
                     onChange={e => {
                       const newFiles = Array.from(e.target.files || []);
                       setImageFiles(prev => [...prev, ...newFiles]);
-                      e.target.value = ''; // allow re-selecting the same file again if removed later
+                      e.target.value = '';
                     }}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-[11px]"
                   />
                   <p className={`text-[10px] mt-1 ${
-                      !editingProduct && imageFiles.length < 2
+                      !editingProduct && imageFiles.length + qrMediaAssets.length < 2
                         ? 'text-amber-700'
                         : 'text-emerald-700'
                     }`}>
-                      {imageFiles.length} new photo{imageFiles.length === 1 ? '' : 's'} selected
-                      {!editingProduct && imageFiles.length < 2 && ' — at least 2 required'}
+                      {imageFiles.length + qrMediaAssets.length} photo{imageFiles.length + qrMediaAssets.length === 1 ? '' : 's'} selected
+                      {!editingProduct && imageFiles.length + qrMediaAssets.length < 2 && ' — at least 2 required'}
                       {editingProduct && ' — existing photos will be preserved'}
                     </p>
-                  {imageFiles.length > 0 && (
+                  {(imageFiles.length > 0 || qrMediaAssets.length > 0) && (
                     <div className="flex flex-wrap gap-2 mt-2">
+                      {qrMediaAssets.map((asset, idx) => (
+                        <div key={asset.id} className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1">
+                          <Image src={asset.url} alt="Uploaded from phone" width={20} height={20} className="w-5 h-5 rounded object-cover" />
+                          <span className="text-[10px] text-rose-900 font-medium">From phone</span>
+                          <button
+                            type="button"
+                            onClick={() => setQrMediaAssets(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-rose-400 hover:text-rose-700 font-bold text-xs leading-none"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
                       {imageFiles.map((file, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 bg-stone-100 border border-stone-300 rounded-lg px-2 py-1">
                           <span className="text-[10px] text-stone-700 truncate max-w-[100px]">{file.name}</span>
@@ -1320,6 +1405,44 @@ export default function AdminProductsPage() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+      {/* QR "Scan to upload from phone" modal */}
+      {qrModalOpen && qrToken && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center shadow-2xl">
+            <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Scan with your phone</h3>
+            <p className="text-xs text-stone-500 mb-4">
+              Open your camera app and scan this code to take or upload a product photo directly
+              from your phone.
+            </p>
+
+            <div className="mx-auto w-48 h-48 border border-stone-200 rounded-xl overflow-hidden bg-stone-50 flex items-center justify-center">
+              {typeof window !== 'undefined' && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                    `${window.location.origin}/upload/${qrToken}`
+                  )}`}
+                  alt="Scan to upload a product photo from your phone"
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-xs text-stone-500 mt-4">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Waiting for your photo&hellip;
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { setQrModalOpen(false); setQrToken(null); }}
+              className="mt-5 w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold text-sm"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

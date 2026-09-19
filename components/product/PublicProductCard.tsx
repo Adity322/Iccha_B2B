@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Lock, ArrowRight, Layers, Ruler } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { Product } from '@/lib/types';
 
 interface PublicProductCardProps {
@@ -11,15 +11,14 @@ interface PublicProductCardProps {
 }
 
 /**
- * Design system reference:
- * - surface:  #FFFFFF        card body
- * - ivory:    #F5F0E6        page/rest background this card sits on
- * - border:   #E7DEC9        hairline card border
- * - ink:      #18140D        primary text / CTA fill
- * - ink-soft: #F3ECDD        text on ink surfaces
- * - muted:    #746A5A        secondary text
- * - subtle:   #A0937B        tertiary text / labels
- * - gold:     #B3823C        minor accent only (icons, one badge dot)
+ * Photo-first card with a floating frosted info panel.
+ *
+ * - The garment stays the hero: the panel is inset and compact, not a full-height gradient.
+ * - Dark glass (not white glass) so text stays readable on bright photos.
+ * - Nothing in the footer can wrap: the price is masked in the meta row and the
+ *   CTA is one full-width pill, so the layout survives narrow 4-up columns.
+ *
+ * Palette: ink #18140D · gold-deep #D9AE68 · border #E7DEC9 · bg #ECE3D0
  */
 export default function PublicProductCard({ product }: PublicProductCardProps) {
   const primaryMedia = product.media[0] || {
@@ -34,10 +33,12 @@ export default function PublicProductCard({ product }: PublicProductCardProps) {
       ? '2-Pc Set'
       : 'Kurti';
 
+  const glassPill =
+    'whitespace-nowrap rounded-full border border-white/15 bg-[#18140D]/45 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur-md';
+
   return (
-    <div className="group flex flex-col h-full rounded-[18px] bg-white border border-black/[0.07] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 hover:shadow-[0_18px_42px_rgba(0,0,0,0.12)] hover:-translate-y-1">
-      {/* Image */}
-      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#ECE3D0]">
+    <article className="group h-full rounded-[28px] border border-[#E7DEC9] bg-white p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(0,0,0,0.12)]">
+      <div className="relative aspect-[5/8] w-full overflow-hidden rounded-[20px] bg-[#ECE3D0]">
         <Image
           src={primaryMedia.url}
           alt={primaryMedia.alt || product.name}
@@ -47,65 +48,47 @@ export default function PublicProductCard({ product }: PublicProductCardProps) {
           referrerPolicy="no-referrer"
         />
 
-        {/* Type pill — top-left, matches reference badge treatment */}
-        <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-[#18140D] text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#B3823C]" />
-          {typeLabel}
+        {/* Soft shade so the panel edge doesn't float on a hard photo */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/40 to-transparent"
+        />
+
+        {/* Top row */}
+        <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
+          <span className={`shrink-0 ${glassPill}`}>{typeLabel}</span>
+          <span className={`min-w-0 truncate tabular-nums ${glassPill}`}>#{product.designNumber}</span>
         </div>
 
-        {/* Lock pill — top-right, quiet until hover */}
-        <div className="absolute top-3 right-3 inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#18140D]/85 text-[#F3ECDD] shadow-sm">
-          <Lock className="w-3.5 h-3.5" />
-        </div>
-
-        {/* Hover reveal — protected pricing message */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#18140D]/92 via-[#18140D]/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-end p-5 text-center">
-          <span className="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#D9AE68] mb-1.5">
-            Protected lot
-          </span>
-          <p className="text-[12px] text-[#F3ECDD]/90 leading-relaxed max-w-[220px]">
-            Wholesale rates unlock once your GSTIN is verified.
-          </p>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 flex flex-col justify-between p-3.5 sm:p-4 gap-3">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-semibold text-[#B3823C] tracking-wide">
-              {product.categoryName}
-            </span>
-            <span className="text-[10px] font-mono text-[#A0937B]">
-              DES-{product.designNumber}
-            </span>
+        {/* Floating info panel */}
+        <div className="absolute inset-x-2 bottom-2 rounded-[18px] border border-white/15 bg-[#18140D]/60 p-3.5 text-white backdrop-blur-xl backdrop-saturate-150">
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="min-w-0 truncate font-medium text-[#D9AE68]">{product.categoryName}</span>
           </div>
 
-          <h3 className="text-[15px] font-semibold leading-snug text-[#18140D] mb-2 line-clamp-1 group-hover:text-[#8C6428] transition">
+          {/* min-h keeps every panel the same height whether the name runs 1 or 2 lines */}
+          <h3 className="mt-1 line-clamp-2 min-h-[2.75em] font-serif text-[17px] leading-snug">
             {product.name}
           </h3>
 
-          <div className="flex items-center gap-3 text-[11px] text-[#746A5A]">
-            <span className="inline-flex items-center gap-1">
-              <Layers className="w-3 h-3 text-[#A0937B]" />
-              {product.fabric}
-            </span>
-            <span className="w-px h-3 bg-[#E7DEC9]" />
-            <span className="inline-flex items-center gap-1">
-              <Ruler className="w-3 h-3 text-[#A0937B]" />
-              {product.style}
-            </span>
-          </div>
-        </div>
+          <p
+            className="mt-1 truncate text-[12px] text-white/65"
+            title={`${product.fabric} · ${product.style}`}
+          >
+            {product.fabric} · {product.style}
+          </p>
 
-        <Link
-          href="/register"
-          className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#18140D] hover:bg-[#2A2318] text-[#F3ECDD] text-[11px] font-semibold uppercase tracking-[0.14em] px-4 py-3 transition-colors"
-        >
-          <span>Unlock Wholesale Rates</span>
-          <ArrowRight className="w-3.5 h-3.5 text-[#D9AE68]" />
-        </Link>
+          <Link
+            href="/register"
+            className="group/cta mt-3 flex h-10 items-center justify-between rounded-full bg-white pl-4 pr-1 text-[13px] font-semibold text-[#18140D] transition-colors hover:bg-[#F5F0E6]"
+          >
+            <span className="whitespace-nowrap">Unlock rates</span>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#18140D] text-white">
+              <ArrowUpRight className="h-4 w-4 transition-transform duration-200 group-hover/cta:-translate-y-0.5 group-hover/cta:translate-x-0.5" />
+            </span>
+          </Link>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }

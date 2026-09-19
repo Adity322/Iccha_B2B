@@ -8,8 +8,7 @@ import {
   X, 
   Sparkles, 
   Lock, 
-  ChevronRight,
-  ShieldCheck
+  ChevronRight
 } from 'lucide-react';
 
 export default function PublicHeader() {
@@ -19,47 +18,13 @@ export default function PublicHeader() {
   const navLinks = [
     { label: 'Home', href: '/' },
     { label: 'Categories', href: '/categories' },
-    { label: 'Collections', href: '/collections' },
     { label: 'About IcchaStore', href: '/about' },
-    { label: 'Craft & Videos', href: '/videos' },
     { label: 'Contact', href: '/contact' }
   ];
 
   return (
     <header className="sticky top-0 z-40 bg-[#f9f7f2]/95 backdrop-blur-md border-b border-black/10 transition-all">
-      {/* Top Wholesale Editorial Advisory Bar — now also carries the primary CTAs */}
-      <div className="bg-[#1a1a1a] text-[#f9f7f2] text-xs py-2.5 px-4 border-b border-black/20">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="hidden md:flex items-center gap-3 min-w-0">
-            <span className="shrink-0 bg-[#f9f7f2] text-[#1a1a1a] text-[9px] uppercase font-bold tracking-[0.25em] px-2 py-0.5">B2B Archive</span>
-            <span className="text-[11px] tracking-wide text-stone-300 truncate">Stitched 2-Piece &amp; 3-Piece Women&apos;s Ethnic Kurti Manufacturing &bull; Surat &amp; Jaipur</span>
-          </div>
-
-          <div className="hidden md:flex items-center gap-2 text-[11px] text-stone-300 font-medium shrink-0">
-            <ShieldCheck className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
-            <span className="hidden lg:inline">GST Verified</span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-white/90 hover:text-white border border-white/25 hover:border-white/50 transition whitespace-nowrap"
-            >
-              <Lock className="w-3 h-3" />
-              Login
-            </Link>
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#1a1a1a] bg-[#f9f7f2] hover:bg-white transition whitespace-nowrap"
-            >
-              <Sparkles className="w-3 h-3 text-[var(--brand-accent)]" />
-              Apply Access
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Header Bar — logo + nav only, single line, nothing else competing for width */}
+      {/* Main Header Bar — logo, nav, and the two primary CTAs, all on one line */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           
@@ -95,6 +60,24 @@ export default function PublicHeader() {
               );
             })}
           </nav>
+
+          {/* Desktop CTAs — Login + Apply Access, now living in the main bar */}
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#1a1a1a] border border-black/15 hover:border-black/40 hover:bg-black/[0.03] transition-colors whitespace-nowrap"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Login
+            </Link>
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#f9f7f2] bg-[#1a1a1a] hover:bg-black shadow-sm transition-colors whitespace-nowrap"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
+              Apply Access
+            </Link>
+          </div>
 
           {/* Mobile Menu Trigger */}
           <button
