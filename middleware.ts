@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
-
-const ADMIN_AREA_ROLES = ["ADMIN", "SUPER_ADMIN", "OPERATIONS_MANAGER", "VENDOR"];
+import { canAccessAdminPath, ADMIN_AREA_ROLES } from "@/lib/auth/roles";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isRetailerRoute = pathname.startsWith("/retailer");
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isRetailerRoute = pathname === "/retailer" || pathname.startsWith("/retailer/");
 
   if (!isAdminRoute && !isRetailerRoute) {
     return NextResponse.next();
@@ -22,15 +21,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAdminRoute && !ADMIN_AREA_ROLES.includes(session.role)) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (isAdminRoute) {
+    if (!(ADMIN_AREA_ROLES as readonly string[]).includes(session.role)) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    // Vendors get the vendor pages only — not KYC, roles, settings, hero, etc.
+    if (!canAccessAdminPath(session.role, pathname)) {
+      return NextResponse.redirect(new URL("/admin/products", request.url));
+    }
   }
 
   if (isRetailerRoute && session.role !== "RETAILER") {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.next();
+  // Hand the path to server components so the layout can re-check against the DB role.
+  const headers = new Headers(request.headers);
+  headers.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

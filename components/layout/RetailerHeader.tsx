@@ -17,7 +17,8 @@ import {
   Sparkles, 
   Package, 
   ChevronDown,
-  Layers
+  Layers,
+  PhoneCall
 } from 'lucide-react';
 import { useApp } from '@/lib/context/AppContext';
 
@@ -43,6 +44,7 @@ export default function RetailerHeader() {
     { label: 'B2B Catalogue', href: '/retailer/catalogue', icon: Layers },
     { label: 'Categories', href: '/categories', icon: Package },
     { label: 'Order Enquiries', href: '/retailer/orders', icon: FileCheck2 },
+    { label: 'Sample Calls', href: '/retailer/sample-call-requests', icon: PhoneCall },
     { label: 'Estimates & Proforma', href: '/retailer/estimates', icon: FileText },
   ];
 

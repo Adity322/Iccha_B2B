@@ -528,7 +528,7 @@ export default function RetailerProductDetailPage() {
 
                   <button
                     type="button"
-                    onClick={openSellerModal}
+                    onClick={() => openSellerModal(product.id)}
                     className="text-[#831843] font-bold hover:underline inline-flex items-center gap-1"
                   >
                     <Video className="w-3.5 h-3.5" />

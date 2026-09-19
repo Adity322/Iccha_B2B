@@ -108,7 +108,7 @@ export default function MOQProgressBar({ evaluation, onOpenSellerModal }: MOQPro
 
           <button
             type="button"
-            onClick={handleOpen}
+            onClick={() => handleOpen()}
             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-700 hover:from-amber-500 hover:to-rose-600 text-white text-xs font-semibold shadow-sm transition whitespace-nowrap"
           >
             <Video className="w-3.5 h-3.5 text-amber-200" />

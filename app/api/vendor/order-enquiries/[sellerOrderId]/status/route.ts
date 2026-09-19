@@ -79,6 +79,16 @@ export async function PATCH(
       );
     }
 
+    if (sellerOrder.status === "CANCELLED") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This seller order was cancelled by the retailer and cannot be reopened.",
+        },
+        { status: 409 }
+      );
+    }
+
     const updated = await prisma.$transaction(async tx => {
       const result = await tx.sellerOrder.update({
         where: {

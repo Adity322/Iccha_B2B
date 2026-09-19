@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Video, 
@@ -13,10 +13,16 @@ import {
   Package 
 } from 'lucide-react';
 import { useApp } from '@/lib/context/AppContext';
-import { SellerRequestService } from '@/lib/services';
 
 export default function SellerRequestModal() {
-  const { isSellerModalOpen, closeSellerModal, cart, currentRetailer, addToast } = useApp();
+  const {
+    isSellerModalOpen,
+    closeSellerModal,
+    cart,
+    currentRetailer,
+    addToast,
+    sellerRequestProductId,
+  } = useApp();
   
   const [customerName, setCustomerName] = useState(currentRetailer?.applicantName || 'Ananya Rathore');
   const [businessName, setBusinessName] = useState(currentRetailer?.businessName || 'Ananya Designer Boutiques');
@@ -29,6 +35,31 @@ export default function SellerRequestModal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedRequestNumber, setSubmittedRequestNumber] = useState<string | null>(null);
 
+  const [selectedProductId, setSelectedProductId] =
+    useState<string | null>(
+      sellerRequestProductId ||
+        cart.items[0]?.productId ||
+        null
+    );
+
+  // Must stay above the early return below (rules of hooks)
+  useEffect(() => {
+    if (sellerRequestProductId) {
+      setSelectedProductId(sellerRequestProductId);
+    } else if (
+      !selectedProductId &&
+      cart.items.length > 0
+    ) {
+      setSelectedProductId(
+        cart.items[0].productId
+      );
+    }
+  }, [
+    sellerRequestProductId,
+    cart.items,
+    selectedProductId,
+  ]);
+
   if (!isSellerModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,32 +67,42 @@ export default function SellerRequestModal() {
     setIsSubmitting(true);
 
     try {
-      const newReq = await SellerRequestService.submitRequest({
-        retailerId: currentRetailer?.id || 'ret-demo',
-        customerName,
-        businessName,
-        mobile,
-        whatsapp,
-        cartSummary: {
-          totalDesigns: cart.totalDesigns,
-          totalSets: cart.totalSets,
-          totalPieces: cart.totalPieces,
-          subtotal: cart.subtotal,
-          items: cart.items.map(i => ({
-            name: i.product.name,
-            sku: i.product.sku,
-            designNumber: i.product.designNumber,
-            sets: i.selectedSets,
-            pieces: i.totalPieces,
-            rate: i.unitPrice
-          }))
-        },
-        preferredDate,
-        preferredTime,
-        remarks
-      });
+      if (!selectedProductId) {
+        throw new Error(
+          'Please select a product for the sample call request.'
+        );
+      }
 
-      setSubmittedRequestNumber(newReq.id);
+      const response = await fetch(
+        '/api/retailer/sample-call-requests',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            productId: selectedProductId,
+            customerName,
+            businessName,
+            mobile,
+            whatsapp,
+            preferredDate,
+            preferredTime,
+            remarks,
+          }),
+        }
+      );
+
+      const json = await response.json();
+
+      if (!response.ok || !json.success) {
+        throw new Error(
+          json.error ||
+            'Could not submit request.'
+        );
+      }
+
+      setSubmittedRequestNumber(json.data.id);
       addToast({
         type: 'success',
         title: 'Video Call & Sample Request Submitted',
@@ -72,7 +113,7 @@ export default function SellerRequestModal() {
       addToast({
         type: 'error',
         title: 'Submission Failed',
-        message: 'Could not send request. Please try again.'
+        message: err instanceof Error ? err.message : 'Could not send request. Please try again.'
       });
     } finally {
       setIsSubmitting(false);

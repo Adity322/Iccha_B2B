@@ -20,6 +20,7 @@ import {
   UserCircle,
   Menu,
   X,
+  PhoneCall,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -39,18 +40,19 @@ const STAFF_ONLY_LINKS: NavLink[] = [
   { label: 'Retailers', href: '/admin/retailers', icon: Users },
   { label: 'Vendors', href: '/admin/vendors', icon: Store },
   { label: 'KYC Applications', href: '/admin/kyc', icon: FileCheck, badge: '2 Pending' },
-  { label: 'Role Management', href: '/admin/roles', icon: UserCog },
+  { label: 'User', href: '/admin/roles', icon: UserCog },
 ];
 
 const SHARED_LINKS: NavLink[] = [
   { label: 'Products', href: '/admin/products', icon: Package },
   { label: 'Warehouses', href: '/admin/warehouses', icon: Boxes },
   { label: 'Order Enquiries', href: '/admin/orders', icon: ShoppingBag },
+  { label: 'Sample Call Requests', href: '/admin/sample-call-requests', icon: PhoneCall },
   { label: 'My Profile', href: '/admin/profile', icon: UserCircle },
 ];
 
 const STAFF_ONLY_TRAILING_LINKS: NavLink[] = [
-  { label: 'Categories & GST', href: '/admin/categories', icon: FolderTree },
+  { label: 'Categories', href: '/admin/categories', icon: FolderTree },
   { label: 'Inventory & Sets', href: '/admin/inventory', icon: Boxes },
   { label: 'MOQ Rules', href: '/admin/moq-rules', icon: Sliders },
   { label: 'Billing & Settings', href: '/admin/settings', icon: ReceiptText },

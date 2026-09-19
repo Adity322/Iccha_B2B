@@ -210,7 +210,7 @@ export default function RetailerCartPage() {
                     <div className="text-center">
                       <button
                         type="button"
-                        onClick={openSellerModal}
+                        onClick={() => openSellerModal()}
                         className="text-xs text-[#831843] font-bold hover:underline inline-flex items-center gap-1"
                       >
                         <Video className="w-3.5 h-3.5" />

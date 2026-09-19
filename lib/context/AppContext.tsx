@@ -34,7 +34,8 @@ interface AppContextType {
 
   // Seller / Below MOQ modal
   isSellerModalOpen: boolean;
-  openSellerModal: () => void;
+  openSellerModal: (productId?: string) => void;
+  sellerRequestProductId: string | null;
   closeSellerModal: () => void;
 
   // Toasts
@@ -76,6 +77,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<Cart>(EMPTY_CART);
   const [isCartLoading, setIsCartLoading] = useState<boolean>(true);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
+  const [sellerRequestProductId, setSellerRequestProductId] =
+    useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const setRole = (newRole: UserRole) => {
@@ -223,8 +226,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const openSellerModal = () => setIsSellerModalOpen(true);
-  const closeSellerModal = () => setIsSellerModalOpen(false);
+  const openSellerModal = (productId?: string) => {
+    setSellerRequestProductId(productId ?? null);
+    setIsSellerModalOpen(true);
+  };
+
+  const closeSellerModal = () => {
+    setIsSellerModalOpen(false);
+    setSellerRequestProductId(null);
+  };
 
   const toggleAdminMoqOverride = async () => {
     if (!currentRetailer) return;
@@ -261,6 +271,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isEvaluatingMoq: isCartLoading,
         isSellerModalOpen,
         openSellerModal,
+        sellerRequestProductId,
         closeSellerModal,
         toasts,
         addToast,

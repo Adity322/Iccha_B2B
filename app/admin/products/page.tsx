@@ -87,7 +87,7 @@ interface Product {
   clothingType: string;
   hsnCode: string;
   media?: { mediaAsset: { publicUrl: string } }[]
-  productSizes?: { id: string; size: string; availableSets: number; sortOrder: number }[]
+  sizes?: { id: string; size: string; availableSets: number; sortOrder: number }[]
 }
 
 type SortKey = 'newest' | 'oldest' | 'price_high' | 'price_low';
@@ -119,6 +119,8 @@ export default function AdminProductsPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [sizeStocks, setSizeStocks] = useState<{ size: string; availableSets: number }[]>([]);
+  const [stockAddition, setStockAddition] = useState(0);
+  const [sizeStockAdditions, setSizeStockAdditions] = useState<{ size: string; availableSets: number }[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -182,9 +184,11 @@ export default function AdminProductsPage() {
       });
   }, []);
 
-  // --- Load warehouses for vendors ---
+  // --- Load warehouses ---
+  // Vendors see only their own warehouses.
+  // Admin/staff can select from all active warehouses.
   useEffect(() => {
-    if (currentUserRole !== 'VENDOR') return;
+    if (!currentUserRole) return;
 
     const loadWarehouses = async () => {
       try {
@@ -199,14 +203,14 @@ export default function AdminProductsPage() {
           addToast({
             type: 'error',
             title: 'Failed to load warehouses',
-            message: json.error || 'Could not load your warehouses.',
+            message: json.error || 'Could not load warehouses.',
           });
         }
       } catch {
         addToast({
           type: 'error',
           title: 'Network error',
-          message: 'Could not load your warehouses.',
+          message: 'Could not load warehouses.',
         });
       } finally {
         setWarehousesLoading(false);
@@ -318,6 +322,8 @@ export default function AdminProductsPage() {
       description: ''
     });
     setSizeStocks([]);
+    setStockAddition(0);
+    setSizeStockAdditions([]);
     setImageFiles([]);
     setIsModalOpen(true);
   };
@@ -328,24 +334,84 @@ export default function AdminProductsPage() {
     const selectedCategory = categories.find(c => c.id === formData.categoryId);
     const requiresSize = Boolean(selectedCategory?.requiresSize);
     const totalSizeSets = sizeStocks.reduce((sum, item) => sum + Number(item.availableSets || 0), 0);
+    const isVendorStockAddition = Boolean(editingProduct && currentUserRole === 'VENDOR');
 
-    if (requiresSize) {
-      const validSizeStocks = sizeStocks.filter(item => item.size.trim() && Number(item.availableSets) >= 0);
-      const duplicateSizes = validSizeStocks.map(item => item.size.trim().toUpperCase()).filter((size, index, arr) => arr.indexOf(size) !== index);
+    // Existing vendor products use additive inventory fields.
+    // Do not validate the existing stock as if the vendor were entering a new product.
+    if (isVendorStockAddition) {
+      if (requiresSize) {
+        const validAdditions = sizeStockAdditions.filter(
+          item => item.size.trim() && Number(item.availableSets) > 0
+        );
+        const duplicateSizes = validAdditions
+          .map(item => item.size.trim().toUpperCase())
+          .filter((size, index, arr) => arr.indexOf(size) !== index);
+
+        if (validAdditions.length === 0) {
+          addToast({
+            type: 'error',
+            title: 'Stock required',
+            message: 'Add stock for at least one size.',
+          });
+          return;
+        }
+
+        if (duplicateSizes.length > 0) {
+          addToast({
+            type: 'error',
+            title: 'Duplicate size',
+            message: 'Each size can be entered only once.',
+          });
+          return;
+        }
+      } else if (Number(stockAddition) <= 0) {
+        addToast({
+          type: 'error',
+          title: 'Stock required',
+          message: 'Enter the number of additional sets you want to add.',
+        });
+        return;
+      }
+    } else if (requiresSize) {
+      const validSizeStocks = sizeStocks.filter(
+        item => item.size.trim() && Number(item.availableSets) >= 0
+      );
+      const duplicateSizes = validSizeStocks
+        .map(item => item.size.trim().toUpperCase())
+        .filter((size, index, arr) => arr.indexOf(size) !== index);
+
       if (validSizeStocks.length === 0) {
-        addToast({ type: 'error', title: 'Sizes required', message: 'Add at least one size and its available stock.' });
+        addToast({
+          type: 'error',
+          title: 'Sizes required',
+          message: 'Add at least one size and its available stock.',
+        });
         return;
       }
+
       if (duplicateSizes.length > 0) {
-        addToast({ type: 'error', title: 'Duplicate size', message: 'Each size can be entered only once.' });
+        addToast({
+          type: 'error',
+          title: 'Duplicate size',
+          message: 'Each size can be entered only once.',
+        });
         return;
       }
+
       if (totalSizeSets < 5) {
-        addToast({ type: 'error', title: 'Minimum stock is 5 sets', message: 'The combined stock across all sizes must be at least 5 sets.' });
+        addToast({
+          type: 'error',
+          title: 'Minimum stock is 5 sets',
+          message: 'The combined stock across all sizes must be at least 5 sets.',
+        });
         return;
       }
     } else if (Number(formData.availableSets) < 5) {
-      addToast({ type: 'error', title: 'Minimum stock is 5 sets', message: 'Please enter at least 5 sets in stock.' });
+      addToast({
+        type: 'error',
+        title: 'Minimum stock is 5 sets',
+        message: 'Please enter at least 5 sets in stock.',
+      });
       return;
     }
 
@@ -410,6 +476,20 @@ export default function AdminProductsPage() {
       hsnCode: formData.hsnCode,
       description: formData.description
     };
+
+    // Vendor edits are stock additions, not stock replacements.
+    // Admin/staff edits continue to use the existing absolute-stock behavior.
+    if (editingProduct && currentUserRole === 'VENDOR') {
+      payload.stockAdjustment = requiresSize ? 0 : Math.max(0, Number(stockAddition));
+      payload.sizeStockAdjustments = requiresSize
+        ? sizeStockAdditions
+            .filter(row => row.size.trim() && Number(row.availableSets) > 0)
+            .map(row => ({
+              size: row.size.trim(),
+              availableSets: Number(row.availableSets),
+            }))
+        : [];
+    }
 
     if (mediaAssetIds.length > 0) {
       payload.mediaAssetIds = mediaAssetIds;
@@ -487,7 +567,11 @@ export default function AdminProductsPage() {
     });
 
     setSizeStocks(
-      (product.productSizes || []).map(s => ({ size: s.size, availableSets: s.availableSets }))
+      (product.sizes || []).map(s => ({ size: s.size, availableSets: s.availableSets }))
+    );
+    setStockAddition(0);
+    setSizeStockAdditions(
+      (product.sizes || []).map(s => ({ size: s.size, availableSets: 0 }))
     );
     setImageFiles([]);
     setIsModalOpen(true);
@@ -897,49 +981,50 @@ export default function AdminProductsPage() {
                     </div>
                   )}
                 </div>
-                {currentUserRole === 'VENDOR' && (
-                  <div>
-                    <label className="block font-bold text-stone-800 mb-1">
-                      Warehouse *
-                    </label>
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">
+                    Warehouse{currentUserRole === 'VENDOR' ? ' *' : ''}
+                  </label>
 
-                    <select
-                      required
-                      value={formData.warehouseId}
-                      onChange={e =>
-                        setFormData({
-                          ...formData,
-                          warehouseId: e.target.value,
-                        })
-                      }
-                      disabled={warehousesLoading}
-                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 disabled:opacity-60"
-                    >
-                      <option value="">
-                        {warehousesLoading
-                          ? 'Loading warehouses...'
-                          : 'Select a warehouse...'}
-                      </option>
+                  <select
+                    required={currentUserRole === 'VENDOR'}
+                    value={formData.warehouseId}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        warehouseId: e.target.value,
+                      })
+                    }
+                    disabled={warehousesLoading}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 disabled:opacity-60"
+                  >
+                    <option value="">
+                      {warehousesLoading
+                        ? 'Loading warehouses...'
+                        : currentUserRole === 'VENDOR'
+                          ? 'Select a warehouse...'
+                          : 'No warehouse / Select warehouse...'}
+                    </option>
 
-                      {warehouses
-                        .filter(warehouse => warehouse.isActive)
-                        .map(warehouse => (
-                          <option key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name}
-                            {warehouse.city ? ` — ${warehouse.city}` : ''}
-                          </option>
-                        ))}
-                    </select>
+                    {warehouses
+                      .filter(warehouse => warehouse.isActive)
+                      .map(warehouse => (
+                        <option key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name}
+                          {warehouse.city ? ` — ${warehouse.city}` : ''}
+                        </option>
+                      ))}
+                  </select>
 
-                    {!warehousesLoading &&
-                      warehouses.filter(warehouse => warehouse.isActive).length === 0 && (
-                        <p className="text-[10px] text-amber-700 mt-1">
-                          You have not added a warehouse yet. Please add a warehouse before
-                          creating a product.
-                        </p>
-                      )}
-                  </div>
-                )}
+                  {!warehousesLoading &&
+                    warehouses.filter(warehouse => warehouse.isActive).length === 0 && (
+                      <p className="text-[10px] text-amber-700 mt-1">
+                        {currentUserRole === 'VENDOR'
+                          ? 'You have not added a warehouse yet. Please add a warehouse before creating a product.'
+                          : 'No active warehouses are available. You can leave this product unassigned or add a warehouse first.'}
+                      </p>
+                    )}
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-stone-800 mb-1">SKU Code *</label>
@@ -1039,20 +1124,41 @@ export default function AdminProductsPage() {
                       </>
                     ) : (
                       <>
-                        <input
-                          type="number"
-                          required
-                          min={5}
-                          value={formData.availableSets}
-                          onChange={e => setFormData({
-                            ...formData,
-                            availableSets: Number(e.target.value)
-                          })}
-                          className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
-                        />
-                        <p className="text-[10px] text-stone-400 mt-1">
-                          Minimum 5 sets required.
-                        </p>
+                        {editingProduct && currentUserRole === 'VENDOR' ? (
+                          <>
+                            <div className="px-3 py-2 bg-stone-100 border border-stone-200 rounded-xl font-mono font-bold text-stone-600">
+                              {formData.availableSets} current sets
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              value={stockAddition}
+                              onChange={e => setStockAddition(Number(e.target.value))}
+                              placeholder="0"
+                              className="w-full mt-2 px-3 py-2 bg-white border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                            />
+                            <p className="text-[10px] text-stone-500 mt-1">
+                              Add stock only. The entered quantity will be added to the current stock.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              required
+                              min={5}
+                              value={formData.availableSets}
+                              onChange={e => setFormData({
+                                ...formData,
+                                availableSets: Number(e.target.value)
+                              })}
+                              className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                            />
+                            <p className="text-[10px] text-stone-400 mt-1">
+                              Minimum 5 sets required.
+                            </p>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -1113,20 +1219,62 @@ export default function AdminProductsPage() {
                       <label className="block font-bold text-stone-800 mb-1">Available Sizes & Stock *</label>
                       <p className="text-[10px] text-stone-500">Enter each size and the number of wholesale sets available in that size.</p>
                     </div>
-                    {sizeStocks.map((row, index) => (
-                      <div key={`${index}-${row.size}`} className="grid grid-cols-[1fr_120px_auto] gap-2 items-end">
-                        <div>
-                          <label className="block text-[10px] font-bold text-stone-600 mb-1">Size</label>
-                          <input value={row.size} onChange={e => setSizeStocks(prev => prev.map((item, i) => i === index ? { ...item, size: e.target.value } : item))} placeholder="M" className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl" />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-stone-600 mb-1">Sets</label>
-                          <input type="number" min={0} value={row.availableSets} onChange={e => setSizeStocks(prev => prev.map((item, i) => i === index ? { ...item, availableSets: Number(e.target.value) } : item))} className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl font-mono" />
-                        </div>
-                        <button type="button" onClick={() => setSizeStocks(prev => prev.filter((_, i) => i !== index))} className="px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl border border-stone-200">Remove</button>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => setSizeStocks(prev => [...prev, { size: '', availableSets: 0 }])} className="px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-800">+ Add Size</button>
+                    {currentUserRole === 'VENDOR' && editingProduct ? (
+                      <>
+                        <p className="text-[10px] text-stone-500">Current stock is shown below. Enter only the additional sets being added in this update.</p>
+                        {sizeStockAdditions.map((row, index) => {
+                          const current = sizeStocks.find(s => s.size.toLowerCase() === row.size.toLowerCase());
+                          return (
+                            <div key={`${index}-${row.size}`} className="grid grid-cols-[1fr_100px_120px_auto] gap-2 items-end">
+                              <div>
+                                <label className="block text-[10px] font-bold text-stone-600 mb-1">Size</label>
+                                <input
+                                  value={row.size}
+                                  onChange={e => setSizeStockAdditions(prev => prev.map((item, i) => i === index ? { ...item, size: e.target.value } : item))}
+                                  placeholder="M"
+                                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-stone-600 mb-1">Current</label>
+                                <div className="px-3 py-2 bg-stone-100 border border-stone-200 rounded-xl font-mono text-stone-600">
+                                  {current?.availableSets ?? 0}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-stone-600 mb-1">Add Sets</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.availableSets}
+                                  onChange={e => setSizeStockAdditions(prev => prev.map((item, i) => i === index ? { ...item, availableSets: Number(e.target.value) } : item))}
+                                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl font-mono"
+                                />
+                              </div>
+                              <button type="button" onClick={() => setSizeStockAdditions(prev => prev.filter((_, i) => i !== index))} className="px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl border border-stone-200">Remove</button>
+                            </div>
+                          );
+                        })}
+                        <button type="button" onClick={() => setSizeStockAdditions(prev => [...prev, { size: '', availableSets: 0 }])} className="px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-800">+ Add Size Stock</button>
+                      </>
+                    ) : (
+                      <>
+                        {sizeStocks.map((row, index) => (
+                          <div key={`${index}-${row.size}`} className="grid grid-cols-[1fr_120px_auto] gap-2 items-end">
+                            <div>
+                              <label className="block text-[10px] font-bold text-stone-600 mb-1">Size</label>
+                              <input value={row.size} onChange={e => setSizeStocks(prev => prev.map((item, i) => i === index ? { ...item, size: e.target.value } : item))} placeholder="M" className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl" />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-stone-600 mb-1">Sets</label>
+                              <input type="number" min={0} value={row.availableSets} onChange={e => setSizeStocks(prev => prev.map((item, i) => i === index ? { ...item, availableSets: Number(e.target.value) } : item))} className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl font-mono" />
+                            </div>
+                            <button type="button" onClick={() => setSizeStocks(prev => prev.filter((_, i) => i !== index))} className="px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl border border-stone-200">Remove</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => setSizeStocks(prev => [...prev, { size: '', availableSets: 0 }])} className="px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-800">+ Add Size</button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl bg-stone-50 border border-stone-200 p-3 text-[10px] text-stone-500">
@@ -1155,7 +1303,9 @@ export default function AdminProductsPage() {
                       {uploading
                         ? 'Uploading image...'
                         : editingProduct
-                          ? 'Save Product Changes'
+                          ? currentUserRole === 'VENDOR'
+                            ? 'Save Product Changes & Add Stock'
+                            : 'Save Product Changes'
                           : 'Save & Publish to Catalogue'}
                     </span>
                   </button>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UserCog, Search, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { UserCog, Search, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { useApp } from '@/lib/context/AppContext';
 
@@ -24,6 +24,81 @@ interface UserRow {
   } | null;
 }
 
+interface PromoteForm {
+  contactName: string;
+  mobile: string;
+  gstin: string;
+  pan: string;
+  address: string;
+  city: string;
+  state: string;
+  stateCode: string;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  ifsc: string;
+  branch: string;
+  upiId: string;
+}
+
+const EMPTY_FORM: PromoteForm = {
+  contactName: '',
+  mobile: '',
+  gstin: '',
+  pan: '',
+  address: '',
+  city: '',
+  state: '',
+  stateCode: '',
+  bankName: '',
+  accountHolder: '',
+  accountNumber: '',
+  ifsc: '',
+  branch: '',
+  upiId: '',
+};
+
+const INPUT_CLASS =
+  'w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 disabled:opacity-60';
+
+function Field({
+  label,
+  value,
+  onChange,
+  required,
+  mono,
+  maxLength,
+  disabled,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  mono?: boolean;
+  maxLength?: number;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="block font-semibold text-stone-700 mb-1">
+        {label}
+        {required ? ' *' : ''}
+      </label>
+      <input
+        type="text"
+        required={required}
+        maxLength={maxLength}
+        disabled={disabled}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className={`${INPUT_CLASS} ${mono ? 'font-mono' : ''}`}
+      />
+    </div>
+  );
+}
+
 export default function AdminRolesPage() {
   const { addToast } = useApp();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -36,14 +111,11 @@ export default function AdminRolesPage() {
   const [demoting, setDemoting] = useState<UserRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [form, setForm] = useState({
-    contactName: '',
-    gstin: '',
-    address: '',
-    city: '',
-    state: '',
-    stateCode: '',
-  });
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [returningVendor, setReturningVendor] = useState(false);
+  const promoteRequestRef = useRef(0);
+
+  const [form, setForm] = useState<PromoteForm>(EMPTY_FORM);
 
   const fetchUsers = async (cursor?: string | null, query = search) => {
     if (cursor) setLoadingMore(true);
@@ -86,9 +158,21 @@ export default function AdminRolesPage() {
     return () => observer.disconnect();
   }, [nextCursor, loadingMore]);
 
-  const openPromote = (u: UserRow) => {
+  const closePromote = () => {
+    promoteRequestRef.current += 1; // invalidate any in-flight prefill request
+    setPromoting(null);
+    setLoadingDetails(false);
+    setReturningVendor(false);
+  };
+
+  const openPromote = async (u: UserRow) => {
+    const requestId = ++promoteRequestRef.current;
+
     setPromoting(u);
+    setReturningVendor(false);
+    // Instant fallback from the table row while the full details load
     setForm({
+      ...EMPTY_FORM,
       contactName: u.name,
       gstin: u.gstin || '',
       address: u.address?.street || '',
@@ -96,7 +180,41 @@ export default function AdminRolesPage() {
       state: u.address?.state || '',
       stateCode: u.address?.stateCode || '',
     });
+    setLoadingDetails(true);
+
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/promote-vendor`, { cache: 'no-store' });
+      const result = await res.json();
+
+      // Modal was closed or another user was opened in the meantime
+      if (requestId !== promoteRequestRef.current) return;
+
+      if (res.ok && result.success) {
+        setForm({ ...EMPTY_FORM, ...result.data.form });
+        setReturningVendor(Boolean(result.data.returningVendor));
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Could not load all details',
+          message: result.error || 'Please fill in the missing fields manually.',
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      if (requestId === promoteRequestRef.current) {
+        addToast({
+          type: 'error',
+          title: 'Could not load all details',
+          message: 'Please fill in the missing fields manually.',
+        });
+      }
+    } finally {
+      if (requestId === promoteRequestRef.current) setLoadingDetails(false);
+    }
   };
+
+  const setField = (key: keyof PromoteForm) => (value: string) =>
+    setForm(prev => ({ ...prev, [key]: value }));
 
   const handlePromote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,8 +234,8 @@ export default function AdminRolesPage() {
         return;
       }
 
-      addToast({ type: 'success', title: 'Promoted to Vendor', message: `${promoting.businessName} can now log in as a vendor.` });
-      setPromoting(null);
+      addToast({ type: 'success', title: 'Promoted to Vendor', message: result.message || `${promoting.businessName} can now log in as a vendor.` });
+      closePromote();
       await fetchUsers();
     } catch (err) {
       console.error(err);
@@ -264,91 +382,58 @@ export default function AdminRolesPage() {
                 <UserCog className="w-5 h-5 text-[#831843]" />
                 Promote {promoting.businessName} to Vendor
               </h3>
-              <button type="button" onClick={() => setPromoting(null)} className="text-stone-400 font-bold text-sm">
+              <button type="button" onClick={closePromote} className="text-stone-400 font-bold text-sm">
                 &times;
               </button>
             </div>
 
-            <p className="text-stone-500">
-              Vendor accounts need billing details on file. The retailer's existing name, mobile, PAN,
-              and address (from their KYC application) carry over automatically — just review and adjust
-              if needed.
-            </p>
+            {loadingDetails ? (
+              <p className="text-stone-500 flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Fetching account details...
+              </p>
+            ) : (
+              <p className="text-stone-500">
+                {returningVendor
+                  ? 'This account was a vendor before. Their previous vendor details (including bank details) have been restored, and their existing products and order history will be reattached. Review and adjust if needed.'
+                  : "The retailer's details from their KYC application and registered address have been filled in automatically. Review and adjust if needed."}
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="block font-semibold text-stone-700 mb-1">Contact Name</label>
-                <input
-                  type="text"
-                  value={form.contactName}
-                  onChange={e => setForm({ ...form, contactName: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block font-semibold text-stone-700 mb-1">GSTIN *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.gstin}
-                  onChange={e => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono focus:outline-none focus:border-rose-900"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block font-semibold text-stone-700 mb-1">Address *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.address}
-                  onChange={e => setForm({ ...form, address: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">City *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.city}
-                  onChange={e => setForm({ ...form, city: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">State *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.state}
-                  onChange={e => setForm({ ...form, state: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block font-semibold text-stone-700 mb-1">State Code * (e.g. 08)</label>
-                <input
-                  type="text"
-                  required
-                  maxLength={2}
-                  value={form.stateCode}
-                  onChange={e => setForm({ ...form, stateCode: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono focus:outline-none focus:border-rose-900"
-                />
+              <Field label="Contact Name" value={form.contactName} onChange={setField('contactName')} disabled={loadingDetails} className="col-span-2" />
+              <Field label="Mobile" value={form.mobile} onChange={setField('mobile')} disabled={loadingDetails} />
+              <Field label="PAN" value={form.pan} onChange={v => setField('pan')(v.toUpperCase())} mono maxLength={10} disabled={loadingDetails} />
+              <Field label="GSTIN" value={form.gstin} onChange={v => setField('gstin')(v.toUpperCase())} required mono disabled={loadingDetails} className="col-span-2" />
+              <Field label="Address" value={form.address} onChange={setField('address')} required disabled={loadingDetails} className="col-span-2" />
+              <Field label="City" value={form.city} onChange={setField('city')} required disabled={loadingDetails} />
+              <Field label="State" value={form.state} onChange={setField('state')} required disabled={loadingDetails} />
+              <Field label="State Code (e.g. 08)" value={form.stateCode} onChange={setField('stateCode')} required mono maxLength={2} disabled={loadingDetails} className="col-span-2" />
+            </div>
+
+            <div className="pt-2 border-t border-stone-100">
+              <h4 className="font-bold text-stone-800 mb-2">Bank Details (optional)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Bank Name" value={form.bankName} onChange={setField('bankName')} disabled={loadingDetails} />
+                <Field label="Account Holder" value={form.accountHolder} onChange={setField('accountHolder')} disabled={loadingDetails} />
+                <Field label="Account Number" value={form.accountNumber} onChange={setField('accountNumber')} mono disabled={loadingDetails} />
+                <Field label="IFSC" value={form.ifsc} onChange={v => setField('ifsc')(v.toUpperCase())} mono disabled={loadingDetails} />
+                <Field label="Branch" value={form.branch} onChange={setField('branch')} disabled={loadingDetails} />
+                <Field label="UPI ID" value={form.upiId} onChange={setField('upiId')} disabled={loadingDetails} />
               </div>
             </div>
 
             <div className="flex gap-2 pt-2 border-t border-stone-100">
               <button
                 type="button"
-                onClick={() => setPromoting(null)}
+                onClick={closePromote}
                 className="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || loadingDetails}
                 className="flex-1 py-2.5 bg-[#831843] hover:bg-rose-900 text-white rounded-xl font-bold shadow transition disabled:opacity-60"
               >
                 {submitting ? 'Promoting...' : 'Confirm Promotion'}

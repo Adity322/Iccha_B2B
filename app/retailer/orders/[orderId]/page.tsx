@@ -14,6 +14,8 @@ import {
   Printer,
   MapPin,
   PackageCheck,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import RetailerHeader from "@/components/layout/RetailerHeader";
 import Footer from "@/components/layout/Footer";
@@ -158,6 +160,7 @@ export default function RetailerOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedEstimate, setSelectedEstimate] = useState<any | null>(null);
+  const [cancellingSellerOrderId, setCancellingSellerOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -214,6 +217,54 @@ export default function RetailerOrderDetailPage() {
   const currentStatusIndex = order
     ? ROADMAP.findIndex((step) => step.statuses.includes(order.status))
     : -1;
+
+  async function cancelSellerOrder(sellerOrderId: string, sellerName: string) {
+    if (!window.confirm(`Cancel the order for ${sellerName}? This will not cancel the other vendors in this order.`)) {
+      return;
+    }
+
+    setCancellingSellerOrderId(sellerOrderId);
+
+    try {
+      const response = await fetch(
+        `/api/retailer/seller-orders/${encodeURIComponent(sellerOrderId)}/cancel`,
+        { method: "POST" }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Could not cancel this seller order.");
+      }
+
+      setOrder((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          status: result.data?.masterCancelled ? "cancelled" : current.status,
+          sellerOrders: current.sellerOrders.map((item) =>
+            item.id === sellerOrderId
+              ? { ...item, status: "cancelled", updatedAt: result.data.updatedAt }
+              : item
+          ),
+        };
+      });
+
+      addToast({
+        type: "success",
+        title: "Seller order cancelled",
+        message: result.message || `${sellerName} order has been cancelled.`,
+      });
+    } catch (error) {
+      addToast({
+        type: "error",
+        title: "Cancellation failed",
+        message: error instanceof Error ? error.message : "Could not cancel this seller order.",
+      });
+    } finally {
+      setCancellingSellerOrderId(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -379,13 +430,37 @@ export default function RetailerOrderDetailPage() {
                       </div>
                     </div>
 
-                    <span
-                      className={`shrink-0 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase ${getSellerStatusClass(
-                        sellerOrder.status
-                      )}`}
-                    >
-                      {formatStatus(sellerOrder.status)}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <span
+                        className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase ${getSellerStatusClass(
+                          sellerOrder.status
+                        )}`}
+                      >
+                        {formatStatus(sellerOrder.status)}
+                      </span>
+
+                      {!["cancelled", "dispatched"].includes(
+                        sellerOrder.status.toLowerCase()
+                      ) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            cancelSellerOrder(sellerOrder.id, sellerOrder.sellerName)
+                          }
+                          disabled={cancellingSellerOrderId === sellerOrder.id}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {cancellingSellerOrderId === sellerOrder.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <XCircle className="h-3.5 w-3.5" />
+                          )}
+                          {cancellingSellerOrderId === sellerOrder.id
+                            ? "Cancelling..."
+                            : "Cancel Vendor Order"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

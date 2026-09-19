@@ -66,7 +66,7 @@ model VendorProfile {
 
 model Warehouse {
   id        String   @id @default(uuid())
-  vendorId  String? // null = platform/admin-owned warehouse, not tied to a vendor
+  vendorId  String?
   name      String
   address   String?
   city      String?
@@ -311,7 +311,6 @@ model Category {
   type            String   @default("kurti_pant_set") // "kurti_pant_set" | "3_pc_suit" | "kurti_only"
   billingEntityId String?
   mediaAssetId    String?
-  imageUrl        String?
   sortOrder       Int      @default(0)
   isFeatured      Boolean  @default(true)
   requiresSize    Boolean  @default(false)
@@ -421,6 +420,7 @@ model Product {
   stockAdjustments  StockAdjustment[]
   stockReservations StockReservation[]
   moqRules          MOQRule[]
+  sellerRequests SellerContactRequest[]
   heroSlides        HeroSlide[]
   vendorId          String?
   vendor            VendorProfile?     @relation(fields: [vendorId], references: [id])
@@ -475,6 +475,8 @@ model StockAdjustment {
   adjustmentSets Int
   newSets        Int
   reason         String // "INITIAL_STOCK" | "PRODUCTION_RECEIPT" | "ORDER_FULFILLMENT" | "DAMAGED" | "MANUAL_CORRECTION"
+  size           String?   // NEW
+  note           String?
   actorUserId    String?
   createdAt      DateTime @default(now())
 
@@ -547,28 +549,46 @@ model MOQOverride {
 model SellerContactRequest {
   id                String   @id @default(uuid())
   retailerProfileId String
+  productId         String?
+
   customerName      String
   businessName      String
   mobile            String
   whatsapp          String?
-  totalDesigns      Int
-  totalSets         Int
-  totalPieces       Int
-  cartSubtotal      Decimal  @db.Decimal(10, 2)
+
+  totalDesigns      Int      @default(1)
+  totalSets         Int      @default(0)
+  totalPieces       Int      @default(0)
+  cartSubtotal      Decimal  @default(0) @db.Decimal(10, 2)
+
   preferredDate     String?
   preferredTime     String?
   remarks           String?
-  status            String   @default("requested") // "requested" | "contact_pending" | "scheduled" | "moq_approved" | "declined"
+
+  // pending | approved | rejected
+  // Old legacy values are still tolerated for existing records.
+  status            String   @default("pending")
+
+  // Vendor user ID when the product belongs to a vendor.
+  // For admin-owned products this stays null until staff reviews it.
   assignedToUserId  String?
+
+  rejectionReason   String?
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   retailerProfile RetailerProfile @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
 
+product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
   @@index([retailerProfileId])
+  @@index([productId])
   @@index([status])
+  @@index([assignedToUserId])
+  @@index([productId, retailerProfileId, status])
 }
-
 // =========================================================================
 // 7. CARTS & CHECKOUT ORDERS
 // =========================================================================
@@ -661,7 +681,7 @@ model OrderEnquiry {
 }
 
 model SellerOrder {
-  id             String           @id @default(uuid())
+  id             String            @id @default(uuid())
   orderEnquiryId String
   vendorId       String?
   sellerName     String
@@ -682,13 +702,13 @@ model SellerOrder {
 }
 
 model SellerOrderStatusHistory {
-  id            String           @id @default(uuid())
+  id            String            @id @default(uuid())
   sellerOrderId String
   status        SellerOrderStatus
   actorUserId   String?
   actorName     String
   notes         String?
-  createdAt     DateTime         @default(now())
+  createdAt     DateTime          @default(now())
 
   sellerOrder SellerOrder @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStorageService } from '@/lib/services/storageService';
 import { prisma } from '@/lib/db';
+import { requireStaffOrVendor } from '@/lib/auth/guard';
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
@@ -14,6 +15,13 @@ const ALLOWED_MIME_TYPES = [
 const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 
 export async function POST(req: NextRequest) {
+  const auth = await requireStaffOrVendor(req);
+  if ('error' in auth) {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: 'UNAUTHORIZED', message: auth.error } },
+      { status: auth.status }
+    );
+  }
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

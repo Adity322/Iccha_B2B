@@ -8,7 +8,6 @@ function toNumber(value: unknown): number {
 
 function parseJson(value: string | null | undefined) {
   if (!value) return null;
-
   try {
     return JSON.parse(value);
   } catch {
@@ -19,6 +18,13 @@ function parseJson(value: string | null | undefined) {
 function normalizeStatus(status: string) {
   return status.toLowerCase();
 }
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+const FREE_SHIPPING_THRESHOLD = 20000;
+const FLAT_SHIPPING = 350;
 
 export async function GET(
   request: NextRequest,
@@ -44,8 +50,6 @@ export async function GET(
       );
     }
 
-    // Important: scope the lookup to the authenticated retailer.
-    // The URL alone must never be enough to access another retailer's order.
     const order = await prisma.orderEnquiry.findFirst({
       where: {
         id: orderId,
@@ -80,6 +84,7 @@ export async function GET(
             id: true,
             productId: true,
             billingEntityId: true,
+            sellerOrderId: true,
             productName: true,
             sku: true,
             designNumber: true,
@@ -170,8 +175,6 @@ export async function GET(
           },
         },
 
-        // Vendor-specific order statuses.
-        // These are read-only for the retailer.
         sellerOrders: {
           orderBy: { createdAt: "asc" },
           select: {
@@ -193,12 +196,7 @@ export async function GET(
       );
     }
 
-    // Resolve vendors explicitly from the ordered products. This keeps vendor
-    // ownership independent from the billing entity and avoids relying on the
-    // billing-entity grouping in the UI.
-    const productIds = Array.from(
-      new Set(order.items.map((item) => item.productId))
-    );
+    const productIds = Array.from(new Set(order.items.map((item) => item.productId)));
 
     const vendorProducts = await prisma.product.findMany({
       where: { id: { in: productIds } },
@@ -218,6 +216,55 @@ export async function GET(
       vendorProducts.map((product) => [product.id, product.vendor])
     );
 
+    const cancelledSellerOrderIds = new Set(
+      order.sellerOrders
+        .filter((sellerOrder) => sellerOrder.status === "CANCELLED")
+        .map((sellerOrder) => sellerOrder.id)
+    );
+
+    // Only active seller-order items contribute to the visible commercial
+    // breakdown and master totals. This also repairs older orders whose stored
+    // master totals were not recalculated when a seller order was cancelled.
+    const activeItems = order.items.filter(
+      (item) => !item.sellerOrderId || !cancelledSellerOrderIds.has(item.sellerOrderId)
+    );
+
+    const activeBillingEntityIds = new Set(
+      activeItems.map((item) => item.billingEntityId)
+    );
+
+    let activeSubtotal = 0;
+    let activeGst = 0;
+    let activeSets = 0;
+    let activePieces = 0;
+    const activeProductIds = new Set<string>();
+
+    for (const item of activeItems) {
+      activeProductIds.add(item.productId);
+      activeSets += item.sets;
+      activePieces += item.totalPieces;
+      activeSubtotal += Number(item.lineSubtotal);
+      activeGst += Number(item.gstAmount);
+    }
+
+    activeSubtotal = roundMoney(activeSubtotal);
+    activeGst = roundMoney(activeGst);
+
+    const activeShipping =
+      activeItems.length === 0
+        ? 0
+        : activeSubtotal > FREE_SHIPPING_THRESHOLD
+          ? 0
+          : activeBillingEntityIds.size * FLAT_SHIPPING;
+
+    const activeMasterTotal = roundMoney(
+      activeSubtotal + activeGst + activeShipping
+    );
+
+    const visibleEstimates = order.estimates.filter((estimate) =>
+      activeBillingEntityIds.has(estimate.billingEntityId)
+    );
+
     const data = {
       id: order.id,
       orderNumber: order.orderNumber,
@@ -230,13 +277,15 @@ export async function GET(
       billingAddress: parseJson(order.billingAddressJson),
       shippingAddress: parseJson(order.shippingAddressJson),
 
-      totalDesigns: order.totalDesigns,
-      totalSets: order.totalSets,
-      totalPieces: order.totalPieces,
-      subtotal: toNumber(order.subtotal),
-      totalGst: toNumber(order.totalGst),
-      shipping: toNumber(order.shipping),
-      masterTotal: toNumber(order.masterTotal),
+      // Return recalculated active-order totals rather than stale values from
+      // before a seller-specific cancellation.
+      totalDesigns: activeProductIds.size,
+      totalSets: activeSets,
+      totalPieces: activePieces,
+      subtotal: activeSubtotal,
+      totalGst: activeGst,
+      shipping: activeShipping,
+      masterTotal: activeMasterTotal,
 
       status: normalizeStatus(order.status),
       customerRemarks: order.customerRemarks,
@@ -259,7 +308,7 @@ export async function GET(
           null,
       })),
 
-      estimates: order.estimates.map((estimate) => ({
+      estimates: visibleEstimates.map((estimate) => ({
         id: estimate.id,
         estimateNumber: estimate.estimateNumber,
         orderId: estimate.orderEnquiryId,
@@ -291,8 +340,6 @@ export async function GET(
         timestamp: entry.createdAt.toISOString(),
       })),
 
-      // Each vendor's status is independent inside the master order.
-      // Retailers can see these statuses but cannot modify them.
       sellerOrders: order.sellerOrders.map((sellerOrder) => ({
         id: sellerOrder.id,
         vendorId: sellerOrder.vendorId,

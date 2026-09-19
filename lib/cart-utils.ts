@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
+import { evaluateMoq } from "@/lib/moq";
 
 const CART_ITEM_INCLUDE = {
     product: {
@@ -50,7 +51,6 @@ export async function getOrCreateCart(retailerProfileId: string): Promise<CartWi
     return cart;
 }
 
-const DEFAULT_MOQ = { minSets: 4, minPieces: 4, minDesigns: 1, minOrderValue: 0 };
 const FREE_SHIPPING_THRESHOLD = 20000;
 const FLAT_SHIPPING = 350;
 
@@ -214,75 +214,14 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
     const estimatedGst = entitySummaries.reduce((sum, e) => sum + e.totalGst, 0);
     const shippingEstimate = entitySummaries.reduce((sum, e) => sum + e.shipping, 0);
     const estimatedTotal = subtotal + estimatedGst + shippingEstimate;
-
-    // MOQ evaluation
-    const retailer = await prisma.retailerProfile.findUnique({ where: { id: retailerProfileId } });
-    const hasOverride = !!retailer?.moqSetsOverride;
-
-    let moq;
-    if (hasOverride) {
-        moq = {
-            isMet: true,
-            currentSets: totalSets,
-            requiredSets: retailer!.moqSetsOverride || 1,
-            currentPieces: totalPieces,
-            requiredPieces: 1,
-            currentDesigns: totalDesigns,
-            requiredDesigns: retailer!.moqDesignsOverride || 1,
-            currentOrderValue: subtotal,
-            requiredOrderValue: 0,
-            deficitSets: 0,
-            deficitPieces: 0,
-            message: "Admin MOQ Exception Active: You can place this trial order.",
-            overrideApplied: true,
-        };
-    } else {
-        const rule = await prisma.mOQRule.findFirst({
-            where: { scope: "GLOBAL", isActive: true },
-            orderBy: { createdAt: "desc" },
-        });
-
-        const requiredSets = rule?.minSets ?? DEFAULT_MOQ.minSets;
-        const requiredPieces = rule?.minPieces ?? DEFAULT_MOQ.minPieces;
-        const requiredDesigns = rule?.minDesigns ?? DEFAULT_MOQ.minDesigns;
-        const requiredOrderValue = rule?.minOrderValue ? Number(rule.minOrderValue) : DEFAULT_MOQ.minOrderValue;
-
-        const deficitSets = Math.max(0, requiredSets - totalSets);
-        const deficitPieces = Math.max(0, requiredPieces - totalPieces);
-        const deficitDesigns = Math.max(0, requiredDesigns - totalDesigns);
-        const deficitOrderValue = Math.max(0, requiredOrderValue - subtotal);
-        const isMet =
-            totalSets >= requiredSets &&
-            totalPieces >= requiredPieces &&
-            totalDesigns >= requiredDesigns &&
-            subtotal >= requiredOrderValue;
-
-        let message = "Minimum order quantity met.";
-        if (!isMet) {
-            const gaps: string[] = [];
-            if (deficitSets > 0) gaps.push(`${deficitSets} more set(s)`);
-            if (deficitPieces > 0) gaps.push(`${deficitPieces} more piece(s)`);
-            if (deficitDesigns > 0) gaps.push(`${deficitDesigns} more unique design(s)`);
-            if (deficitOrderValue > 0) gaps.push(`₹${deficitOrderValue.toLocaleString("en-IN")} more in order value`);
-            message = `Add ${gaps.join(", ")} to meet the minimum wholesale order quantity.`;
-        }
-
-        moq = {
-            isMet,
-            currentSets: totalSets,
-            requiredSets,
-            currentPieces: totalPieces,
-            requiredPieces,
-            currentDesigns: totalDesigns,
-            requiredDesigns,
-            currentOrderValue: subtotal,
-            requiredOrderValue,
-            deficitSets,
-            deficitPieces,
-            message,
-            overrideApplied: false,
-        };
-    }
+    // MOQ evaluation — same engine checkout uses, so cart and order can never disagree.
+    const moq = await evaluateMoq(prisma, {
+        retailerProfileId,
+        totalSets,
+        totalPieces,
+        totalDesigns,
+        subtotal,
+    });
 
     return {
         id: cart.id,

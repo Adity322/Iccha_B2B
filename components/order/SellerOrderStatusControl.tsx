@@ -40,11 +40,18 @@ export default function SellerOrderStatusControl({
 
   const normalizedInitialStatus = initialStatus.toUpperCase();
 
+  // Draft status selected in the dropdown
   const [status, setStatus] = useState(normalizedInitialStatus);
+
+  // Last status actually saved to the database
+  const [savedStatus, setSavedStatus] = useState(
+    normalizedInitialStatus
+  );
+
   const [saving, setSaving] = useState(false);
 
   async function updateStatus() {
-    if (!status) return;
+    if (!status || status === savedStatus) return;
 
     setSaving(true);
 
@@ -78,8 +85,11 @@ export default function SellerOrderStatusControl({
         json.data?.status || status
       ).toUpperCase();
 
+      // Both states now represent the persisted status
       setStatus(nextStatus);
-      onUpdated?.(nextStatus.toLowerCase());
+      setSavedStatus(nextStatus);
+
+      onUpdated?.(nextStatus);
 
       addToast({
         type: "success",
@@ -100,19 +110,26 @@ export default function SellerOrderStatusControl({
     }
   }
 
+  // IMPORTANT:
+  // Use savedStatus, not the dropdown's draft status.
+  // Otherwise selecting DISPATCHED immediately hides the button.
   const isFinalStatus =
-    status === "DISPATCHED" || status === "CANCELLED";
+    savedStatus === "DISPATCHED" ||
+    savedStatus === "CANCELLED";
 
   return (
     <div className="bg-white rounded-3xl border border-stone-200 p-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400">
-            {mode === "vendor" ? "Your Seller Order" : "IcchaStore Order"}
+            {mode === "vendor"
+              ? "Your Seller Order"
+              : "IcchaStore Order"}
           </p>
 
           <div className="flex items-center gap-2 mt-1">
             <CheckCircle2 className="w-4 h-4 text-[#831843]" />
+
             <h2 className="font-serif text-xl font-bold text-stone-900">
               {sellerName}
             </h2>
@@ -128,7 +145,7 @@ export default function SellerOrderStatusControl({
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
           {readOnly || isFinalStatus ? (
             <span className="px-3 py-2.5 rounded-xl bg-stone-100 border border-stone-200 text-xs font-bold text-stone-700">
-              {label(status)}
+              {label(savedStatus)}
             </span>
           ) : (
             <>
@@ -148,7 +165,7 @@ export default function SellerOrderStatusControl({
               <button
                 type="button"
                 onClick={updateStatus}
-                disabled={saving}
+                disabled={saving || status === savedStatus}
                 className="px-4 py-2.5 bg-[#831843] hover:bg-rose-900 disabled:bg-stone-300 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
               >
                 {saving ? (
@@ -156,6 +173,7 @@ export default function SellerOrderStatusControl({
                 ) : (
                   <Save className="w-3.5 h-3.5" />
                 )}
+
                 {saving ? "Saving..." : "Update Status"}
               </button>
             </>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRetailer } from "@/lib/auth/guard";
+import { evaluateMoq } from "@/lib/moq";
 import type { BillingEntity } from "@prisma/client";
 
 const FREE_SHIPPING_THRESHOLD = 20000;
@@ -295,31 +296,18 @@ export async function POST(request: NextRequest) {
         0
       );
 
-      // Enforce the same base MOQ used by the live cart unless an approved
-      // retailer override is active.
-      if (!retailer.moqSetsOverride) {
-        const rule = await tx.mOQRule.findFirst({
-          where: { scope: "GLOBAL", isActive: true },
-          orderBy: { createdAt: "desc" },
-        });
-
-        const requiredSets = rule?.minSets ?? 4;
-        const requiredPieces = rule?.minPieces ?? 4;
-        const requiredDesigns = rule?.minDesigns ?? 1;
-        const requiredOrderValue = rule?.minOrderValue ? Number(rule.minOrderValue) : 0;
-
-        if (
-          totalSets < requiredSets ||
-          totalPieces < requiredPieces ||
-          totalDesigns < requiredDesigns ||
-          subtotal < requiredOrderValue
-        ) {
-          throw new Error(
-            `Minimum wholesale order not met. Required: ${requiredSets} sets, ${requiredPieces} pieces, ${requiredDesigns} design(s)`
-          );
-        }
+            // Same MOQ engine as the live cart: the global rule, or this retailer's active admin override.
+      const moqResult = await evaluateMoq(tx, {
+        retailerProfileId: retailer.id,
+        totalSets,
+        totalPieces,
+        totalDesigns,
+        subtotal,
+      });
+      if (!moqResult.isMet) {
+        throw new Error(moqResult.blockMessage);
       }
-
+      
       // Seller-owned GST billing. VendorProfile is the source of truth for vendor
       // legal/GST details; IcchaStore-owned products use the platform entity.
       const platformCode = process.env.PLATFORM_BILLING_ENTITY_CODE || "platform";

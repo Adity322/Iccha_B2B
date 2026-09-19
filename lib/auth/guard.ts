@@ -68,3 +68,14 @@ export async function requireRetailer(request: NextRequest) {
 
   return { user, retailerProfile: user.retailerProfile };
 }
+export async function requireStaffOrVendor(request: NextRequest) {
+  const staff = await requireStaff(request);
+  if (!("error" in staff)) return staff;
+
+  const vendor = await requireVendor(request);
+  if (!("error" in vendor)) return vendor;
+
+  // Not logged in at all -> 401; logged in but wrong role -> 403.
+  const status = staff.status === 401 ? (401 as const) : (403 as const);
+  return { error: "Admin or vendor access required", status };
+}

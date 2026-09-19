@@ -119,64 +119,53 @@ export default function AdminOrderDetailPage({
   }, [id, vendorId, addToast]);
 
   useEffect(() => {
-    if (!id || !order) return;
+    if (!id || !order || !currentRole) return;
+
+    let cancelled = false;
 
     async function loadSellerOrders() {
       setSellerOrdersLoading(true);
+
       try {
-        // Do not use order.scope to decide which API to call.
-        // In admin vendor-filtered views, order.scope is "vendor" even
-        // though the authenticated user is staff. The authenticated role
-        // is the source of truth.
         const isVendorUser = currentRole === "VENDOR";
 
-        if (isVendorUser) {
-          const response = await fetch(
-            `/api/vendor/order-enquiries?orderId=${encodeURIComponent(id)}`,
-            { cache: "no-store" }
-          );
-
-          const json = await response.json();
-
-          if (!response.ok || !json.success) {
-            throw new Error(
-              json.error || "Could not load seller order status."
+        const response = isVendorUser
+          ? await fetch(
+              `/api/vendor/order-enquiries?orderId=${encodeURIComponent(id)}`,
+              { cache: "no-store" }
+            )
+          : await fetch(
+              `/api/admin/order-enquiries/${encodeURIComponent(id)}/seller-orders${
+                vendorId ? `?vendorId=${encodeURIComponent(vendorId)}` : ""
+              }`,
+              { cache: "no-store" }
             );
-          }
 
-          const matches = (json.data || []).map(
-            (sellerOrder: SellerOrder) => ({
-              id: sellerOrder.id,
-              vendorId: sellerOrder.vendorId,
-              sellerName: sellerOrder.sellerName,
-              status: sellerOrder.status,
-              createdAt: sellerOrder.createdAt,
-              updatedAt: sellerOrder.updatedAt,
-            })
+        const json = await response.json();
+
+        if (!response.ok || !json.success) {
+          throw new Error(
+            json.error || "Could not load seller order status."
           );
-
-          setSellerOrders(matches);
-        } else {
-          const query = vendorId
-            ? `?vendorId=${encodeURIComponent(vendorId)}`
-            : "";
-
-          const response = await fetch(
-            `/api/admin/order-enquiries/${encodeURIComponent(id)}/seller-orders${query}`,
-            { cache: "no-store" }
-          );
-
-          const json = await response.json();
-
-          if (!response.ok || !json.success) {
-            throw new Error(
-              json.error || "Could not load seller order status."
-            );
-          }
-
-          setSellerOrders(json.data || []);
         }
+
+        if (cancelled) return;
+
+        const matches = (json.data || []).map(
+          (sellerOrder: SellerOrder) => ({
+            id: sellerOrder.id,
+            vendorId: sellerOrder.vendorId,
+            sellerName: sellerOrder.sellerName,
+            status: String(sellerOrder.status).toUpperCase(),
+            createdAt: sellerOrder.createdAt,
+            updatedAt: sellerOrder.updatedAt,
+          })
+        );
+
+        setSellerOrders(matches);
       } catch (error) {
+        if (cancelled) return;
+
         addToast({
           type: "error",
           title: "Could not load seller status",
@@ -186,12 +175,18 @@ export default function AdminOrderDetailPage({
               : "Could not load seller status.",
         });
       } finally {
-        setSellerOrdersLoading(false);
+        if (!cancelled) {
+          setSellerOrdersLoading(false);
+        }
       }
     }
 
     loadSellerOrders();
-  }, [id, order, vendorId, currentRole, addToast]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, order?.id, vendorId, currentRole, addToast]);
 
   if (loading) {
     return (
@@ -294,9 +289,17 @@ export default function AdminOrderDetailPage({
             mode={currentRole === "VENDOR" ? "vendor" : "admin"}
             readOnly={currentRole !== "VENDOR" && !!vendorId}
             onUpdated={(nextStatus) => {
+              const normalizedStatus = String(nextStatus).toUpperCase();
+
               setSellerOrders(current =>
                 current.map(item =>
-                  item.id === sellerOrder.id ? { ...item, status: nextStatus } : item
+                  item.id === sellerOrder.id
+                    ? {
+                        ...item,
+                        status: normalizedStatus,
+                        updatedAt: new Date().toISOString(),
+                      }
+                    : item
                 )
               );
             }}

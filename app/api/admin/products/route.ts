@@ -44,6 +44,12 @@ const productFieldsSchema = z.object({
     mediaAssetIds: z.array(z.string()).optional(),
     vendorId: z.string().optional(),
     warehouseId: z.string().optional(),
+    // Vendor edits treat these values as additions to existing inventory.
+    stockAdjustment: z.number().int().min(0).optional(),
+    sizeStockAdjustments: z.array(z.object({
+        size: z.string().trim().min(1, "Size is required"),
+        availableSets: z.number().int().min(0, "Stock addition cannot be negative"),
+    })).optional(),
 });
 
 const updateProductSchema = productFieldsSchema.extend({
@@ -481,11 +487,168 @@ export async function PATCH(request: NextRequest) {
             );
         }
 
+        const billingEntityId = await resolveProductBillingEntityId(vendorId);
+
+        // Vendor inventory changes are additive. This prevents an edit such as
+        // "add 3 M and 5 XL" from replacing the existing stock with 8 total.
+        if (auth.kind === "vendor") {
+            const stockAdjustment = Math.max(0, data.stockAdjustment ?? 0);
+            const sizeStockAdjustments = (data.sizeStockAdjustments ?? []).map((row) => ({
+                size: row.size.trim(),
+                availableSets: row.availableSets,
+            }));
+
+            const normalizedAdjustmentSizes = sizeStockAdjustments.map((row) => row.size.toUpperCase());
+            if (new Set(normalizedAdjustmentSizes).size !== normalizedAdjustmentSizes.length) {
+                return NextResponse.json(
+                    { success: false, error: "Each stock-addition size can be entered only once." },
+                    { status: 400 }
+                );
+            }
+
+            const gstConfigId = await resolveGstConfigId(
+                billingEntityId,
+                data.hsnCode
+            );
+
+            const product = await prisma.$transaction(
+                async (tx) => {
+                const current = await tx.product.findUnique({
+                    where: { id: data.productId },
+                    select: {
+                        id: true,
+                        availableSets: true,
+                        sizes: {
+                            select: { id: true, size: true, availableSets: true, sortOrder: true },
+                            orderBy: { sortOrder: "asc" },
+                        },
+                    },
+                });
+
+                if (!current) throw new Error("Product not found");
+
+                let totalAvailableSets = current.availableSets;
+
+                if (category.requiresSize) {
+                    for (const adjustment of sizeStockAdjustments) {
+                        if (adjustment.availableSets <= 0) continue;
+
+                        const existingSize = current.sizes.find(
+                            (row) => row.size.toLowerCase() === adjustment.size.toLowerCase()
+                        );
+
+                        if (existingSize) {
+                            await tx.productSize.update({
+                                where: { id: existingSize.id },
+                                data: { availableSets: { increment: adjustment.availableSets } },
+                            });
+                        } else {
+                            await tx.productSize.create({
+                                data: {
+                                    productId: current.id,
+                                    size: adjustment.size.toUpperCase(),
+                                    availableSets: adjustment.availableSets,
+                                    sortOrder: current.sizes.length,
+                                },
+                            });
+                        }
+                    }
+
+                    const updatedSizes = await tx.productSize.findMany({
+                        where: { productId: current.id },
+                        select: { availableSets: true },
+                    });
+                    totalAvailableSets = updatedSizes.reduce(
+                        (sum, row) => sum + row.availableSets,
+                        0
+                    );
+                } else {
+                    totalAvailableSets = current.availableSets + stockAdjustment;
+                }
+
+                const totalAvailablePieces = totalAvailableSets * data.piecesPerSet;
+                const finalSizes = category.requiresSize
+                    ? await tx.productSize.findMany({
+                        where: { productId: current.id },
+                        orderBy: { sortOrder: "asc" },
+                        select: { size: true },
+                    })
+                    : [];
+
+                const updated = await tx.product.update({
+                    where: { id: current.id },
+                    data: {
+                        sku: data.sku,
+                        designNumber: data.designNumber,
+                        name: data.name,
+                        slug: data.slug,
+                        description: data.description,
+                        categoryId: data.categoryId,
+                        subcategoryId: data.subcategoryId,
+                        collectionId: data.collectionId,
+                        wholesalePricePerPiece: data.wholesalePricePerPiece,
+                        piecesPerSet: data.piecesPerSet,
+                        wholesalePricePerSet: data.wholesalePricePerSet,
+                        availableSets: totalAvailableSets,
+                        totalAvailablePieces,
+                        sizeCombination: finalSizes.map((row) => row.size).join(", "),
+                        color: data.color,
+                        fabric: data.fabric,
+                        workType: data.workType,
+                        style: data.style,
+                        clothingType: data.clothingType,
+                        hsnCode: data.hsnCode,
+                        gstConfigId,
+                        vendorId,
+                        warehouseId: data.warehouseId ?? null,
+                        ...(data.mediaAssetIds && data.mediaAssetIds.length > 0
+                            ? {
+                                media: {
+                                    deleteMany: {},
+                                    create: data.mediaAssetIds.map((mediaAssetId, index) => ({
+                                        mediaAssetId,
+                                        mediaType: index === 0 ? "MAIN_IMAGE" : "ALTERNATE_IMAGE",
+                                        isPrimary: index === 0,
+                                    })),
+                                },
+                            }
+                            : {}),
+                    },
+                    include: productInclude,
+                });
+
+                const adjustmentTotal = category.requiresSize
+                    ? sizeStockAdjustments.reduce((sum, row) => sum + row.availableSets, 0)
+                    : stockAdjustment;
+
+                if (adjustmentTotal > 0) {
+                    await tx.stockAdjustment.create({
+                        data: {
+                            productId: current.id,
+                            previousSets: current.availableSets,
+                            adjustmentSets: adjustmentTotal,
+                            newSets: totalAvailableSets,
+                            reason: "PRODUCTION_RECEIPT",
+                            actorUserId: auth.user.id,
+                        },
+                    });
+                }
+
+                return updated;
+                },
+                {
+                    maxWait: 10000,
+                    timeout: 15000,
+                }
+            );
+
+            return NextResponse.json({ success: true, data: product });
+        }
+
         const totalAvailableSets = category.requiresSize
             ? sizeStocks.reduce((sum, row) => sum + row.availableSets, 0)
             : data.availableSets;
         const totalAvailablePieces = totalAvailableSets * data.piecesPerSet;
-        const billingEntityId = await resolveProductBillingEntityId(vendorId);
         const gstConfigId = await resolveGstConfigId(
             billingEntityId,
             data.hsnCode
