@@ -33,7 +33,7 @@ function toCategory(c: DbCategory): Category {
     name: c.name,
     slug: c.slug,
     description: c.description || `Wholesale ${c.name} manufactured in-house.`,
-    image: c.imageUrl || c.mediaAsset?.publicUrl || FALLBACK_IMAGE,
+    image: c.mediaAsset?.publicUrl || FALLBACK_IMAGE,
     billingEntityId: c.billingEntityId || undefined,
     subcategories: c.subcategories.map((s) => s.name),
     itemCount: c._count.products,
