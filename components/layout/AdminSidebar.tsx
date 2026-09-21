@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAdminRole } from './AdminRoleContext';
 import {
   LayoutDashboard,
   Sparkles,
@@ -16,6 +17,7 @@ import {
   Store,
   ReceiptText,
   ExternalLink,
+  LogOut,
   UserCog,
   UserCircle,
   Menu,
@@ -31,15 +33,23 @@ interface NavLink {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  badge?: string;
 }
+
+interface SidebarCounts {
+  pendingKyc: number;
+  newOrders: number;
+  pendingSampleCalls: number;
+}
+
+const EMPTY_COUNTS: SidebarCounts = { pendingKyc: 0, newOrders: 0, pendingSampleCalls: 0 };
+const COUNTS_REFRESH_MS = 30000;
 
 const STAFF_ONLY_LINKS: NavLink[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Hero Banners', href: '/admin/hero', icon: Sparkles, badge: 'WebGL' },
+  { label: 'Hero Banners', href: '/admin/hero', icon: Sparkles },
   { label: 'Retailers', href: '/admin/retailers', icon: Users },
   { label: 'Vendors', href: '/admin/vendors', icon: Store },
-  { label: 'KYC Applications', href: '/admin/kyc', icon: FileCheck, badge: '2 Pending' },
+  { label: 'KYC Applications', href: '/admin/kyc', icon: FileCheck },
   { label: 'User', href: '/admin/roles', icon: UserCog },
 ];
 
@@ -60,11 +70,17 @@ const STAFF_ONLY_TRAILING_LINKS: NavLink[] = [
 
 export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
   const pathname = usePathname();
-  const [role, setRole] = useState<string | null>(null);
-  const [newOrderCount, setNewOrderCount] = useState(0);
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const contextRole = useAdminRole();
+  const [fetchedRole, setRole] = useState<string | null>(null);
+  // Server-provided role is available on first render; the fetch is only a fallback.
+  const role = contextRole ?? fetchedRole;
+  const [counts, setCounts] = useState<SidebarCounts>(EMPTY_COUNTS);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
+    if (contextRole) return;
     let cancelled = false;
 
     fetch('/api/auth/me', { cache: 'no-store' })
@@ -81,52 +97,92 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [contextRole]);
 
+  // Live pill counts. Refreshes on mount, on every navigation (so approving a KYC
+  // application or opening an order updates the pill right away), every 30s while the
+  // tab is visible, and when the tab regains focus.
   useEffect(() => {
+    if (!role) return;
     let cancelled = false;
 
-    async function loadNewOrderCount() {
+    async function loadCounts() {
       try {
-        const res = await fetch('/api/admin/order-enquiries/new-count', {
-          cache: 'no-store',
-        });
+        const res = await fetch('/api/admin/sidebar-counts', { cache: 'no-store' });
         const json = await res.json();
 
         if (!cancelled && res.ok && json.success) {
-          setNewOrderCount(Number(json.count ?? 0));
+          setCounts({
+            pendingKyc: Number(json.data?.pendingKyc ?? 0),
+            newOrders: Number(json.data?.newOrders ?? 0),
+            pendingSampleCalls: Number(json.data?.pendingSampleCalls ?? 0),
+          });
         }
       } catch {
-        if (!cancelled) setNewOrderCount(0);
+        // Keep the last known numbers rather than flashing the pills to 0 on a network blip.
       }
     }
 
-    loadNewOrderCount();
+    loadCounts();
 
-    const interval = window.setInterval(loadNewOrderCount, 30000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadCounts();
+    }, COUNTS_REFRESH_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadCounts();
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [role, pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      // Clears the httpOnly session cookie on the server
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Still leave the admin area even if the request fails.
+    }
+    router.replace('/login');
+    router.refresh();
+  };
+
   const isVendor = role === 'VENDOR';
 
-  const navLinks: NavLink[] = isVendor
-    ? SHARED_LINKS
-    : [...STAFF_ONLY_LINKS, ...SHARED_LINKS, ...STAFF_ONLY_TRAILING_LINKS];
+  // Unknown role -> show no links (never default to the full staff menu).
+  const navLinks: NavLink[] = !role
+    ? []
+    : isVendor
+      ? SHARED_LINKS
+      : [...STAFF_ONLY_LINKS, ...SHARED_LINKS, ...STAFF_ONLY_TRAILING_LINKS];
 
+  const formatCount = (n: number) => (n > 99 ? '99+' : String(n));
+
+  // Pills only appear when there is something to act on.
   const getBadge = (item: NavLink) => {
-    if (item.href === '/admin/orders') {
-      return newOrderCount > 0 ? `${newOrderCount} New` : null;
+    switch (item.href) {
+      case '/admin/kyc':
+        return counts.pendingKyc > 0 ? `${formatCount(counts.pendingKyc)} Pending` : null;
+      case '/admin/orders':
+        return counts.newOrders > 0 ? `${formatCount(counts.newOrders)} New` : null;
+      case '/admin/sample-call-requests':
+        return counts.pendingSampleCalls > 0
+          ? `${formatCount(counts.pendingSampleCalls)} Pending`
+          : null;
+      default:
+        return null;
     }
-
-    return item.badge ?? null;
   };
 
   return (
@@ -237,7 +293,7 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
         </nav>
 
         <div className="p-3 border-t border-stone-800 bg-stone-900/60 space-y-2 shrink-0">
-          {!isVendor && (
+          {role && !isVendor && (
             <div className="px-2 py-1.5 bg-stone-950 rounded-lg border border-stone-800 text-[11px] text-stone-400">
               <div className="font-semibold text-stone-200">Surat & Jaipur Hubs</div>
               <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] mt-0.5">
@@ -254,6 +310,16 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
             <ExternalLink className="w-3.5 h-3.5" />
             Public View
           </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium bg-rose-950/60 hover:bg-rose-900/70 text-rose-200 border border-rose-900/60 transition disabled:opacity-60"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            {loggingOut ? 'Signing out...' : 'Sign Out'}
+          </button>
         </div>
       </aside>
     </>

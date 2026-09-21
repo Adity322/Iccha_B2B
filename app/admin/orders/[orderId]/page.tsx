@@ -10,6 +10,9 @@ import SellerOrderStatusControl from "@/components/order/SellerOrderStatusContro
 type Item = {
   id: string; productName: string; sku: string; designNumber: string;
   categoryName: string; sets: number; totalPieces: number;
+  piecesPerSet?: number; pieceRate?: number; setRate?: number;
+  gstRate?: number; hsn?: string | null; color?: string | null;
+  sizeCombination?: string | null;
   lineSubtotal: number; gstAmount: number; totalWithGst: number;
   imageUrl?: string | null;
   product?: {
@@ -33,9 +36,17 @@ type SellerOrder = {
   updatedAt: string;
 };
 
+type Address = {
+  street?: string; area?: string; city?: string; state?: string;
+  stateCode?: string; pincode?: string; landmark?: string;
+};
+
 type Order = {
   id: string; orderNumber: string; retailerBusinessName: string;
   retailerApplicantName: string; retailerContact: string; retailerEmail: string;
+  retailerGstin?: string | null;
+  billingAddressJson?: string | null; shippingAddressJson?: string | null;
+  customerRemarks?: string | null;
   status: string; totalDesigns: number; totalSets: number; totalPieces: number;
   subtotal: number; totalGst: number; shipping: number; masterTotal: number;
   createdAt: string; items: Item[]; history: History[];
@@ -44,6 +55,26 @@ type Order = {
 
 function money(v: number) {
   return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function parseAddress(raw?: string | null): Address | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Address;
+  } catch {
+    return null;
+  }
+}
+
+function AddressLines({ address }: { address: Address | null }) {
+  if (!address) return <p className="text-xs text-stone-400 mt-2">Not provided</p>;
+  return (
+    <div className="text-xs text-stone-600 mt-2 leading-relaxed">
+      <p>{[address.street, address.area].filter(Boolean).join(", ")}</p>
+      <p>{[address.city, address.state].filter(Boolean).join(", ")}{address.pincode ? ` - ${address.pincode}` : ""}</p>
+      {address.landmark && <p className="text-stone-500">Landmark: {address.landmark}</p>}
+    </div>
+  );
 }
 
 function label(v: string) {
@@ -64,6 +95,7 @@ export default function AdminOrderDetailPage({
   const [order, setOrder] = useState<Order | null>(null);
   const [sellerOrders, setSellerOrders] = useState<SellerOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sellerOrdersLoading, setSellerOrdersLoading] = useState(true);
 
   useEffect(() => {
@@ -79,6 +111,7 @@ export default function AdminOrderDetailPage({
         setCurrentRole(String(json.data?.role || "").toUpperCase());
       })
       .catch((error) => {
+        setSellerOrdersLoading(false);
         addToast({
           type: "error",
           title: "Authentication error",
@@ -104,17 +137,13 @@ export default function AdminOrderDetailPage({
           throw new Error(j.error || "Could not load order.");
         }
         setOrder(j.data);
+        setLoadError(null);
       })
-      .catch(e =>
-        addToast({
-          type: "error",
-          title: "Could not load order",
-          message:
-            e instanceof Error
-              ? e.message
-              : "Order could not be loaded.",
-        })
-      )
+      .catch(e => {
+        const message = e instanceof Error ? e.message : "Order could not be loaded.";
+        setLoadError(message);
+        addToast({ type: "error", title: "Could not load order", message });
+      })
       .finally(() => setLoading(false));
   }, [id, vendorId, addToast]);
 
@@ -131,11 +160,11 @@ export default function AdminOrderDetailPage({
 
         const response = isVendorUser
           ? await fetch(
-              `/api/vendor/order-enquiries?orderId=${encodeURIComponent(id)}`,
+              `/api/vendor/order-enquiries?orderId=${encodeURIComponent(order!.id)}`,
               { cache: "no-store" }
             )
           : await fetch(
-              `/api/admin/order-enquiries/${encodeURIComponent(id)}/seller-orders${
+              `/api/admin/order-enquiries/${encodeURIComponent(order!.id)}/seller-orders${
                 vendorId ? `?vendorId=${encodeURIComponent(vendorId)}` : ""
               }`,
               { cache: "no-store" }
@@ -214,13 +243,18 @@ export default function AdminOrderDetailPage({
           <div className="mt-8 bg-white rounded-3xl border p-10 text-center">
             <Package className="w-8 h-8 mx-auto text-stone-300" />
             <h1 className="font-serif text-2xl font-bold mt-3">
-              Order not found
+              {loadError ? "Could not load this order" : "Order not found"}
             </h1>
+            {loadError && <p className="text-xs text-stone-500 mt-2">{loadError}</p>}
           </div>
         </main>
       </div>
     );
   }
+
+  const isStaffView = currentRole !== null && currentRole !== "VENDOR";
+  const shippingAddress = parseAddress(order.shippingAddressJson);
+  const billingAddress = parseAddress(order.billingAddressJson);
 
   const vendors = Array.from(
     new Map(
@@ -329,6 +363,10 @@ export default function AdminOrderDetailPage({
             <p className="font-bold mt-2">{order.retailerBusinessName}</p>
             <p className="text-xs text-stone-500 mt-1">{order.retailerApplicantName}</p>
             <p className="text-xs text-stone-500 mt-1">{order.retailerContact}</p>
+            {order.retailerEmail && <p className="text-xs text-stone-500 mt-1">{order.retailerEmail}</p>}
+            {isStaffView && order.retailerGstin && (
+              <p className="text-xs font-mono text-stone-500 mt-1">GSTIN {order.retailerGstin}</p>
+            )}
           </div>
 
           <div className="bg-white rounded-3xl border border-stone-200 p-5">
@@ -349,6 +387,28 @@ export default function AdminOrderDetailPage({
               Subtotal {money(order.subtotal)} + GST {money(order.totalGst)}
             </p>
           </div>
+        </section>
+
+        <section className={`grid grid-cols-1 gap-4 ${isStaffView ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+          <div className="bg-white rounded-3xl border border-stone-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-stone-400">Order Details</p>
+            <p className="text-xs text-stone-600 mt-2">Status: <strong className="text-stone-900">{label(order.status)}</strong></p>
+            <p className="text-xs text-stone-600 mt-1">Placed: <strong className="text-stone-900">{new Date(order.createdAt).toLocaleString("en-IN")}</strong></p>
+            <p className="text-xs text-stone-600 mt-3">Retailer remarks / transport</p>
+            <p className="text-xs text-stone-900 mt-1 whitespace-pre-line">{order.customerRemarks || "None"}</p>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-stone-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-stone-400">Shipping Address</p>
+            <AddressLines address={shippingAddress} />
+          </div>
+
+          {isStaffView && (
+            <div className="bg-white rounded-3xl border border-stone-200 p-5">
+              <p className="text-[10px] uppercase tracking-widest text-stone-400">Billing Address</p>
+              <AddressLines address={billingAddress} />
+            </div>
+          )}
         </section>
 
         <section className="bg-white rounded-3xl border border-stone-200 overflow-hidden">
@@ -381,10 +441,26 @@ export default function AdminOrderDetailPage({
                     <p className="font-bold text-[#831843]">{money(item.totalWithGst)}</p>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mt-4">
+                  {(item.sizeCombination || item.color || item.hsn) && (
+                    <p className="text-xs text-stone-500 mt-1">
+                      {[
+                        item.sizeCombination ? `Sizes ${item.sizeCombination}` : null,
+                        item.color ? `Color ${item.color}` : null,
+                        item.hsn ? `HSN ${item.hsn}` : null,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-3 md:grid-cols-5 gap-3 mt-4">
+                    {item.pieceRate !== undefined && (
+                      <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] text-stone-400">Rate / pc</p><p className="font-bold">{money(item.pieceRate)}</p></div>
+                    )}
+                    {item.setRate !== undefined && (
+                      <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] text-stone-400">Rate / set{item.piecesPerSet ? ` (${item.piecesPerSet} pcs)` : ""}</p><p className="font-bold">{money(item.setRate)}</p></div>
+                    )}
                     <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] text-stone-400">Sets</p><p className="font-bold">{item.sets}</p></div>
                     <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] text-stone-400">Pieces</p><p className="font-bold">{item.totalPieces}</p></div>
-                    <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] text-stone-400">GST</p><p className="font-bold">{money(item.gstAmount)}</p></div>
+                    <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] text-stone-400">GST{item.gstRate !== undefined ? ` (${item.gstRate}%)` : ""}</p><p className="font-bold">{money(item.gstAmount)}</p></div>
                   </div>
 
                   <div className="flex flex-wrap gap-3 mt-4">

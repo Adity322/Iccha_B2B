@@ -51,7 +51,11 @@ type MoqInput = {
 
 export async function evaluateMoq(db: Db, input: MoqInput) {
   const { totalSets, totalPieces, totalDesigns, subtotal } = input;
-  const override = await getActiveMoqOverride(db, input.retailerProfileId);
+  // Independent lookups: fetch together so the round-trips overlap.
+  const [override, rule] = await Promise.all([
+    getActiveMoqOverride(db, input.retailerProfileId),
+    getGlobalMoqRule(db),
+  ]);
 
   if (override) {
     const requiredSets = override.permittedMinSets;
@@ -77,7 +81,6 @@ export async function evaluateMoq(db: Db, input: MoqInput) {
     };
   }
 
-  const rule = await getGlobalMoqRule(db);
   const deficitSets = Math.max(0, rule.minSets - totalSets);
   const deficitPieces = Math.max(0, rule.minPieces - totalPieces);
   const deficitDesigns = Math.max(0, rule.minDesigns - totalDesigns);

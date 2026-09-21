@@ -167,7 +167,8 @@ export default function AdminProductsPage() {
   }, [addToast]);
 
   useEffect(() => {
-    if (view === 'vendors' && currentUserRole !== 'VENDOR') {
+    // Wait until the role is known; the vendor list is staff-only (vendors would get a 403).
+    if (view === 'vendors' && currentUserRole && currentUserRole !== 'VENDOR') {
       loadVendors(vendorSearch);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

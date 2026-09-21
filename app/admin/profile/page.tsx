@@ -183,7 +183,8 @@ export default function VendorProfilePage() {
     <div className="flex min-h-screen bg-[#faf8f5]">
       <AdminSidebar activeTab="profile" />
 
-      <main className="flex-1 p-6 lg:p-10 space-y-6 overflow-y-auto max-w-3xl">
+      <main className="flex-1 min-w-0 p-6 lg:p-10 overflow-y-auto">
+        <div className="w-full max-w-4xl space-y-6">
 
         <div className="flex items-start justify-between gap-4 border-b border-stone-200 pb-6">
           <div>
@@ -491,6 +492,7 @@ export default function VendorProfilePage() {
             <p className="text-stone-500">Click "Change Password" to update your login credentials.</p>
           )}
         </form>
+        </div>
       </main>
     </div>
   );

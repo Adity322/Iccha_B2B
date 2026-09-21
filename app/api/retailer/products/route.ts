@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRetailer } from "@/lib/auth/guard";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 9;
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
             }
           : {}),
       },
-      orderBy: { createdAt: "desc" },
+      // id as a tie-breaker keeps cursor pagination stable when createdAt values match
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: PAGE_SIZE + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {

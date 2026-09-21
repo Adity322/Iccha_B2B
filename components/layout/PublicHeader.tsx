@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -8,12 +8,52 @@ import {
   X, 
   Sparkles, 
   Lock, 
-  ChevronRight
+  ChevronRight,
+  LayoutDashboard
 } from 'lucide-react';
+
+type SessionInfo = { role: string; email: string; retailerStatus?: string } | null;
+
+// Where each role lands after login (mirrors app/login/page.tsx)
+function getDashboardHref(session: NonNullable<SessionInfo>) {
+  if (session.role === 'RETAILER') {
+    return session.retailerStatus === 'APPROVED' || !session.retailerStatus
+      ? '/retailer'
+      : `/application-status?email=${encodeURIComponent(session.email)}`;
+  }
+  if (session.role === 'VENDOR') return '/admin/products';
+  return '/admin';
+}
 
 export default function PublicHeader() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [session, setSession] = useState<SessionInfo>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled && json.success) {
+          setSession({
+            role: json.data.role,
+            email: json.data.email,
+            retailerStatus: json.data.retailerStatus,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setAuthChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dashboardHref = session ? getDashboardHref(session) : null;
 
   const navLinks = [
     { label: 'Home', href: '/' },
@@ -62,21 +102,33 @@ export default function PublicHeader() {
           </nav>
 
           {/* Desktop CTAs — Login + Apply Access, now living in the main bar */}
-          <div className="hidden lg:flex items-center gap-3 shrink-0">
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#1a1a1a] border border-black/15 hover:border-black/40 hover:bg-black/[0.03] transition-colors whitespace-nowrap"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              Login
-            </Link>
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#f9f7f2] bg-[#1a1a1a] hover:bg-black shadow-sm transition-colors whitespace-nowrap"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
-              Apply Access
-            </Link>
+          <div className={`hidden lg:flex items-center gap-3 shrink-0 transition-opacity ${authChecked ? 'opacity-100' : 'opacity-0'}`}>
+            {dashboardHref ? (
+              <Link
+                href={dashboardHref}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#f9f7f2] bg-[#1a1a1a] hover:bg-black shadow-sm transition-colors whitespace-nowrap"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#1a1a1a] border border-black/15 hover:border-black/40 hover:bg-black/[0.03] transition-colors whitespace-nowrap"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  Login
+                </Link>
+                <Link
+                  href="/register"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#f9f7f2] bg-[#1a1a1a] hover:bg-black shadow-sm transition-colors whitespace-nowrap"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
+                  Apply Access
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Trigger */}
@@ -110,21 +162,34 @@ export default function PublicHeader() {
           </div>
 
           <div className="pt-4 flex flex-col gap-3">
-            <Link
-              href="/register"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-3 px-4 bg-[#1a1a1a] text-[#f9f7f2] font-bold uppercase text-[10px] tracking-[0.25em] shadow flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4 text-[var(--brand-accent)]" />
-              Apply for Wholesale Access
-            </Link>
-            <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-3 px-4 border border-black/20 text-[#1a1a1a] font-bold uppercase text-[10px] tracking-[0.2em] hover:bg-black/5"
-            >
-              Retailer Login
-            </Link>
+            {dashboardHref ? (
+              <Link
+                href={dashboardHref}
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full text-center py-3 px-4 bg-[#1a1a1a] text-[#f9f7f2] font-bold uppercase text-[10px] tracking-[0.25em] shadow flex items-center justify-center gap-2"
+              >
+                <LayoutDashboard className="w-4 h-4 text-[var(--brand-accent)]" />
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-3 px-4 bg-[#1a1a1a] text-[#f9f7f2] font-bold uppercase text-[10px] tracking-[0.25em] shadow flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4 text-[var(--brand-accent)]" />
+                  Apply for Wholesale Access
+                </Link>
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-3 px-4 border border-black/20 text-[#1a1a1a] font-bold uppercase text-[10px] tracking-[0.2em] hover:bg-black/5"
+                >
+                  Retailer Login
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

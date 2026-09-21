@@ -1,250 +1,597 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { 
-  ShoppingBag, 
-  FileCheck2, 
-  FileText, 
-  User, 
-  LogOut, 
-  Search, 
-  Menu, 
-  X, 
-  Building2, 
-  ShieldCheck, 
-  Sparkles, 
-  Package, 
+import {
+  ShoppingBag,
+  FileCheck2,
+  FileText,
+  User,
+  LogOut,
+  Menu,
+  X,
+  Building2,
+  ShieldCheck,
+  Package,
   ChevronDown,
   Layers,
-  PhoneCall
+  PhoneCall,
+  LayoutDashboard,
+  UserCircle,
+  CreditCard,
 } from 'lucide-react';
 import { useApp } from '@/lib/context/AppContext';
+
+const navItems = [
+  {
+    label: 'Catalogue',
+    href: '/retailer/catalogue',
+    icon: Layers,
+  },
+  {
+    label: 'Categories',
+    href: '/categories',
+    icon: Package,
+  },
+  {
+    label: 'Orders',
+    href: '/retailer/orders',
+    icon: FileCheck2,
+  },
+  {
+    label: 'Sample Calls',
+    href: '/retailer/sample-call-requests',
+    icon: PhoneCall,
+  },
+  {
+    label: 'Estimates',
+    href: '/retailer/estimates',
+    icon: FileText,
+  },
+];
 
 export default function RetailerHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentRetailer, cart, setRole, setCurrentRetailer, addToast } = useApp();
+
+  const {
+    cart,
+    setRole,
+    setCurrentRetailer,
+    addToast,
+  } = useApp();
+
+  // Real logged-in retailer, from the session (not the demo/mock context)
+  const [account, setAccount] = useState<{
+    businessName: string | null;
+    name: string | null;
+    email: string | null;
+    gstin: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled || !json.success) return;
+        setAccount({
+          businessName: json.data.retailerBusinessName ?? null,
+          name: json.data.name ?? null,
+          email: json.data.email ?? null,
+          gstin: json.data.retailerGstin ?? null,
+        });
+      })
+      .catch(() => {
+        // Header falls back to generic "Retailer Account" text.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const currentRetailer = account;
+
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const handleLogout = () => {
+  const cartCount = cart?.items?.length || 0;
+
+  const handleLogout = async () => {
+    setUserDropdownOpen(false);
+    setMobileNavOpen(false);
+
+    try {
+      // Actually end the server session (clears the httpOnly cookie)
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Continue clearing local state even if the request fails.
+    }
+
     setRole('public');
     setCurrentRetailer(null);
-    addToast({
-      type: 'info',
-      title: 'Logged Out',
-      message: 'You have exited the authenticated retailer session.'
-    });
+
+    addToast?.({ type: 'success', title: 'Logged out successfully', message: '' });
+
     router.push('/');
+    router.refresh();
   };
 
-  const navItems = [
-    { label: 'B2B Catalogue', href: '/retailer/catalogue', icon: Layers },
-    { label: 'Categories', href: '/categories', icon: Package },
-    { label: 'Order Enquiries', href: '/retailer/orders', icon: FileCheck2 },
-    { label: 'Sample Calls', href: '/retailer/sample-call-requests', icon: PhoneCall },
-    { label: 'Estimates & Proforma', href: '/retailer/estimates', icon: FileText },
-  ];
+  const isActive = (href: string) => {
+    if (href === '/categories') {
+      return pathname === href || pathname.startsWith('/categories/');
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
+  const closeMobileMenu = () => {
+    setMobileNavOpen(false);
+  };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#1a1a1a] text-[#f9f7f2] border-b border-white/10 shadow-sm">
-      {/* Top B2B Commercial Status Bar */}
-      <div className="bg-[#111111] text-stone-300 text-xs py-1.5 px-4 border-b border-white/10">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1 bg-white/10 text-amber-300 px-2 py-0.5 text-[10px] uppercase font-bold tracking-[0.2em] border border-white/20">
-              <ShieldCheck className="w-3 h-3 text-amber-300" />
-              Verified Wholesale Session
-            </span>
-            <span className="hidden sm:inline text-stone-400 font-mono text-[11px]">
-              GSTIN: <span className="text-stone-200">{currentRetailer?.gstin || '07AAECR8812M1Z4'}</span>
-            </span>
-          </div>
+    <>
+      <header className="sticky top-0 z-50 w-full bg-[#171717] text-[#f8f5ef] border-b border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.18)]">
+        {/* =========================================================
+    TOP STATUS BAR
+========================================================= */}
+        <div className="border-b border-white/[0.06] bg-[#111111]">
+          <div className="mx-auto flex h-9 max-w-[1400px] items-center justify-end px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-4 text-[9px] uppercase tracking-[0.14em]">
 
-          <div className="flex items-center gap-4 text-xs">
-            <span className="text-stone-400 hidden md:inline">
-              Tier: <strong className="text-amber-300 font-normal uppercase tracking-wider">{currentRetailer?.classification || 'Tier 1 - Platinum'}</strong>
-            </span>
-            <Link href="/retailer/kyc" className="text-stone-300 hover:text-white transition text-[11px]">
-              KYC Status: <span className="uppercase tracking-wider text-amber-400 font-bold">{currentRetailer?.status?.replace('_', ' ') || 'Approved'}</span>
-            </Link>
-          </div>
-        </div>
-      </div>
+              {/* GST */}
+              {currentRetailer?.gstin && (
+                <div className="flex items-center gap-2 text-stone-500">
+                  <span>GSTIN</span>
 
-      {/* Main Retailer Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          
-          {/* Logo & B2B Badge */}
-          <div className="flex items-center gap-4">
-            <Link href="/retailer" className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-[#f9f7f2] text-[#1a1a1a] flex items-center justify-center font-serif text-lg font-bold border border-black/20">
-                इ
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-serif text-xl tracking-tight text-white font-normal block leading-none">
-                    ICCHA<span className="italic text-amber-300 font-light ml-0.5">STORE</span>
-                  </span>
-                  <span className="bg-white/10 text-stone-300 text-[9px] uppercase font-bold tracking-[0.25em] px-1.5 py-0.5 border border-white/20">
-                    B2B ARCHIVE
+                  <span className="text-stone-300">
+                    {currentRetailer.gstin}
                   </span>
                 </div>
-              </div>
-            </Link>
+              )}
 
-            {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-1 ml-6 text-xs uppercase tracking-[0.2em] font-bold">
+              <span className="h-3 w-px bg-white/10" />
+
+              {/* VERIFIED ACCOUNT */}
+              <div className="flex items-center gap-1.5 text-emerald-400">
+                <ShieldCheck size={12} strokeWidth={1.8} />
+
+                <span>Verified Account</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* =========================================================
+            MAIN NAVBAR
+        ========================================================= */}
+        <div className="mx-auto flex h-[72px] max-w-[1400px] items-center px-4 sm:px-6 lg:px-8">
+          {/* LOGO */}
+          <Link
+            href="/retailer/catalogue"
+            onClick={closeMobileMenu}
+            className="group flex shrink-0 items-center gap-3"
+          >
+            <div className="flex h-10 w-10 items-center justify-center border border-amber-400/30 bg-amber-400/[0.07] text-lg font-serif text-amber-300 transition-all duration-300 group-hover:border-amber-300/60 group-hover:bg-amber-400/10">
+              इ
+            </div>
+
+            <div className="hidden sm:block leading-none">
+              <div className="font-serif text-[15px] font-semibold tracking-[0.14em] text-[#f9f7f2]">
+                ICCHA
+                <span className="ml-1 text-amber-300">STORE</span>
+              </div>
+
+              <div className="mt-1.5 text-[7px] font-medium tracking-[0.3em] text-stone-500">
+                B2B ARCHIVE
+              </div>
+            </div>
+          </Link>
+
+          {/* DESKTOP NAV */}
+          <nav className="ml-8 hidden h-full items-center lg:flex">
+            <div className="flex h-full items-center gap-1">
               {navItems.map((item) => {
-                const isActive = pathname === item.href || (item.href !== '/retailer' && pathname.startsWith(item.href));
                 const Icon = item.icon;
+                const active = isActive(item.href);
+
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 transition ${
-                      isActive
-                        ? 'bg-white/10 text-amber-300 border-b border-amber-300'
-                        : 'text-stone-400 hover:text-[#f9f7f2]'
-                    }`}
+                    className={`group relative flex h-full items-center gap-2 px-3.5 text-[10px] font-medium uppercase tracking-[0.13em] transition-colors duration-200 ${active
+                        ? 'text-amber-300'
+                        : 'text-stone-400 hover:text-stone-100'
+                      }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon
+                      size={14}
+                      strokeWidth={1.6}
+                      className={`transition-colors ${active
+                          ? 'text-amber-300'
+                          : 'text-stone-500 group-hover:text-stone-300'
+                        }`}
+                    />
+
                     <span>{item.label}</span>
+
+                    <span
+                      className={`absolute bottom-0 left-3 right-3 h-px bg-amber-300 transition-all duration-300 ${active
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-40'
+                        }`}
+                    />
                   </Link>
                 );
               })}
-            </nav>
-          </div>
+            </div>
+          </nav>
 
-          {/* Right Action Icons & Profile */}
-          <div className="flex items-center gap-3">
-            
-            {/* Wholesale Cart Trigger */}
+          {/* RIGHT ACTIONS */}
+          <div className="ml-auto flex items-center gap-2">
+            {/* CART */}
             <Link
               href="/retailer/cart"
-              className={`relative inline-flex items-center gap-2 px-3.5 py-1.5 text-xs uppercase tracking-[0.2em] font-bold transition border ${
-                pathname === '/retailer/cart'
-                  ? 'bg-white text-[#1a1a1a] border-white'
-                  : 'bg-transparent border-white/20 text-stone-200 hover:border-white'
-              }`}
+              className={`group relative flex h-10 items-center gap-2.5 rounded-sm border px-3.5 transition-all duration-200 ${pathname.startsWith('/retailer/cart')
+                  ? 'border-amber-300/40 bg-amber-300/[0.08] text-amber-300'
+                  : 'border-white/10 text-stone-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-white'
+                }`}
             >
-              <ShoppingBag className="w-3.5 h-3.5 text-amber-300" />
-              <span className="hidden sm:inline">Wholesale Cart</span>
-              {cart.totalSets > 0 && (
-                <span className="bg-amber-400 text-stone-950 text-[10px] font-bold px-1.5 py-0.2">
-                  {cart.totalSets}
-                </span>
-              )}
+              <div className="relative">
+                <ShoppingBag
+                  size={17}
+                  strokeWidth={1.7}
+                />
+
+                {cartCount > 0 && (
+                  <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-300 px-1 text-[8px] font-bold text-[#171717]">
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </span>
+                )}
+              </div>
+
+              <span className="hidden xl:block text-[9px] font-medium uppercase tracking-[0.14em]">
+                Cart
+              </span>
             </Link>
 
-            {/* User Account Dropdown */}
+            {/* DIVIDER */}
+            <div className="mx-1 hidden h-7 w-px bg-white/[0.08] sm:block" />
+
+            {/* PROFILE */}
             <div className="relative">
               <button
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-stone-200 border border-white/15 text-xs font-medium transition"
-                aria-expanded={userDropdownOpen}
+                type="button"
+                onClick={() =>
+                  setUserDropdownOpen((prev) => !prev)
+                }
+                className={`flex h-10 items-center gap-2.5 rounded-sm border px-2.5 transition-all duration-200 ${userDropdownOpen
+                    ? 'border-white/20 bg-white/[0.07]'
+                    : 'border-transparent hover:border-white/10 hover:bg-white/[0.04]'
+                  }`}
               >
-                <div className="w-5 h-5 bg-[#ded9d0] text-[#1a1a1a] flex items-center justify-center text-[10px] font-bold uppercase">
-                  {currentRetailer?.applicantName?.[0] || 'R'}
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-700 text-[10px] font-semibold text-stone-200 ring-1 ring-white/10">
+                  {(
+                    currentRetailer?.businessName ||
+                    currentRetailer?.name ||
+                    'R'
+                  )
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
-                <div className="text-left hidden lg:block">
-                  <div className="text-xs font-medium leading-tight text-stone-100 truncate max-w-[140px]">
-                    {currentRetailer?.businessName || 'Rajeshwari Boutique'}
-                  </div>
+
+                <div className="hidden text-left xl:block">
+                  <p className="max-w-[130px] truncate text-[10px] font-medium text-stone-200">
+                    {currentRetailer?.businessName ||
+                      currentRetailer?.name ||
+                      'Retailer Account'}
+                  </p>
+
+                  <p className="mt-0.5 text-[8px] uppercase tracking-[0.12em] text-emerald-400">
+                    Approved Retailer
+                  </p>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+
+                <ChevronDown
+                  size={14}
+                  className={`hidden text-stone-500 transition-transform duration-200 sm:block ${userDropdownOpen ? 'rotate-180' : ''
+                    }`}
+                />
               </button>
 
+              {/* PROFILE DROPDOWN */}
               {userDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-[#1a1a1a] border border-white/20 shadow-2xl py-2 z-50 divide-y divide-white/10">
-                  <div className="px-4 py-2.5">
-                    <p className="text-xs font-serif italic text-white truncate">
-                      {currentRetailer?.businessName || 'Rajeshwari Boutique'}
-                    </p>
-                    <p className="text-[11px] text-stone-400 truncate mt-0.5">
-                      {currentRetailer?.email || 'rajeshwari.kurtis@gmail.com'}
-                    </p>
-                    <div className="mt-2 inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.2em] bg-white/10 text-amber-300 border border-white/20 px-2 py-0.5">
-                      <ShieldCheck className="w-3 h-3" /> Approved Retailer
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close profile menu"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="fixed inset-0 z-40 cursor-default"
+                  />
+
+                  <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-72 overflow-hidden rounded-sm border border-white/10 bg-[#202020] shadow-2xl">
+                    {/* PROFILE HEADER */}
+                    <div className="border-b border-white/[0.07] bg-[#191919] p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-stone-700 text-sm font-semibold text-stone-200 ring-1 ring-white/10">
+                          {(
+                            currentRetailer?.businessName ||
+                            currentRetailer?.name ||
+                            'R'
+                          )
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">
+                            {currentRetailer?.businessName ||
+                              currentRetailer?.name ||
+                              'Retailer Account'}
+                          </p>
+
+                          {currentRetailer?.email && (
+                            <p className="mt-1 truncate text-[10px] text-stone-500">
+                              {currentRetailer.email}
+                            </p>
+                          )}
+
+                          <div className="mt-2 inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.13em] text-emerald-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                            Approved Retailer
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PROFILE LINKS */}
+                    <div className="p-2">
+                      <Link
+                        href="/retailer"
+                        onClick={() =>
+                          setUserDropdownOpen(false)
+                        }
+                        className="group flex items-center gap-3 rounded-sm px-3 py-2.5 text-stone-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      >
+                        <LayoutDashboard
+                          size={15}
+                          className="text-stone-500 group-hover:text-amber-300"
+                        />
+
+                        <span className="text-[10px] uppercase tracking-[0.1em]">
+                          Dashboard
+                        </span>
+                      </Link>
+
+                      <Link
+                        href="/retailer/profile"
+                        onClick={() =>
+                          setUserDropdownOpen(false)
+                        }
+                        className="group flex items-center gap-3 rounded-sm px-3 py-2.5 text-stone-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      >
+                        <UserCircle
+                          size={15}
+                          className="text-stone-500 group-hover:text-amber-300"
+                        />
+
+                        <span className="text-[10px] uppercase tracking-[0.1em]">
+                          Business Profile
+                        </span>
+                      </Link>
+
+                      <Link
+                        href="/retailer/kyc"
+                        onClick={() =>
+                          setUserDropdownOpen(false)
+                        }
+                        className="group flex items-center gap-3 rounded-sm px-3 py-2.5 text-stone-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      >
+                        <CreditCard
+                          size={15}
+                          className="text-stone-500 group-hover:text-amber-300"
+                        />
+
+                        <span className="text-[10px] uppercase tracking-[0.1em]">
+                          KYC Details
+                        </span>
+                      </Link>
+                    </div>
+
+                    {/* LOGOUT */}
+                    <div className="border-t border-white/[0.07] p-2">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="group flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-stone-500 transition-colors hover:bg-red-500/[0.06] hover:text-red-300"
+                      >
+                        <LogOut
+                          size={15}
+                          className="group-hover:text-red-300"
+                        />
+
+                        <span className="text-[10px] uppercase tracking-[0.1em]">
+                          Sign Out
+                        </span>
+                      </button>
                     </div>
                   </div>
-
-                  <div className="py-1 text-xs uppercase tracking-wider">
-                    <Link
-                      href="/retailer"
-                      onClick={() => setUserDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-stone-300 hover:bg-white/10 hover:text-white"
-                    >
-                      <Package className="w-3.5 h-3.5 text-stone-400" />
-                      Retailer Dashboard
-                    </Link>
-                    <Link
-                      href="/retailer/profile"
-                      onClick={() => setUserDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-stone-300 hover:bg-white/10 hover:text-white"
-                    >
-                      <Building2 className="w-3.5 h-3.5 text-stone-400" />
-                      Business Profile
-                    </Link>
-                    <Link
-                      href="/retailer/kyc"
-                      onClick={() => setUserDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-stone-300 hover:bg-white/10 hover:text-white"
-                    >
-                      <FileCheck2 className="w-3.5 h-3.5 text-stone-400" />
-                      KYC Documents
-                    </Link>
-                  </div>
-
-                  <div className="py-1">
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs uppercase tracking-wider text-rose-300 hover:bg-white/10"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      Logout Portal
-                    </button>
-                  </div>
-                </div>
+                </>
               )}
             </div>
 
-            {/* Mobile Nav Toggle */}
+            {/* MOBILE MENU BUTTON */}
             <button
-              onClick={() => setMobileNavOpen(!mobileNavOpen)}
-              className="p-2 bg-white/10 md:hidden text-stone-300 hover:text-white"
+              type="button"
+              onClick={() =>
+                setMobileNavOpen((prev) => !prev)
+              }
+              className="ml-1 flex h-10 w-10 items-center justify-center rounded-sm border border-white/10 text-stone-300 transition-colors hover:bg-white/[0.05] hover:text-white lg:hidden"
+              aria-label={
+                mobileNavOpen
+                  ? 'Close navigation'
+                  : 'Open navigation'
+              }
             >
-              {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileNavOpen ? (
+                <X size={19} strokeWidth={1.7} />
+              ) : (
+                <Menu size={19} strokeWidth={1.7} />
+              )}
             </button>
-
           </div>
         </div>
-      </div>
 
-      {/* Mobile Retailer Navigation Drawer */}
-      {mobileNavOpen && (
-        <div className="md:hidden border-t border-white/10 bg-[#1a1a1a] px-4 py-3 space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileNavOpen(false)}
-                className={`flex items-center gap-2 px-3 py-2 text-xs uppercase tracking-[0.2em] font-bold ${
-                  pathname === item.href ? 'bg-white/10 text-amber-300' : 'text-stone-300 hover:bg-white/5'
-                }`}
-              >
-                <Icon className="w-4 h-4 text-stone-400" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </header>
+        {/* =========================================================
+            MOBILE NAVIGATION
+        ========================================================= */}
+        {mobileNavOpen && (
+          <div className="border-t border-white/[0.07] bg-[#191919] lg:hidden">
+            <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6">
+              {/* MOBILE ACCOUNT SUMMARY */}
+              <div className="mb-3 flex items-center gap-3 border-b border-white/[0.07] pb-4">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-700 text-xs font-semibold text-stone-200">
+                  {(
+                    currentRetailer?.businessName ||
+                    currentRetailer?.name ||
+                    'R'
+                  )
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-stone-200">
+                    {currentRetailer?.businessName ||
+                      currentRetailer?.name ||
+                      'Retailer Account'}
+                  </p>
+
+                  <div className="mt-1 flex items-center gap-1.5 text-[8px] uppercase tracking-[0.12em] text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Verified Account
+                  </div>
+                </div>
+              </div>
+
+              {/* MOBILE NAV ITEMS */}
+              <div className="space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.href);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={closeMobileMenu}
+                      className={`flex items-center gap-3 rounded-sm px-3.5 py-3 transition-colors ${active
+                          ? 'bg-amber-300/[0.08] text-amber-300'
+                          : 'text-stone-400 hover:bg-white/[0.04] hover:text-white'
+                        }`}
+                    >
+                      <Icon
+                        size={17}
+                        strokeWidth={1.6}
+                      />
+
+                      <span className="text-[10px] font-medium uppercase tracking-[0.14em]">
+                        {item.label}
+                      </span>
+
+                      {active && (
+                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-300" />
+                      )}
+                    </Link>
+                  );
+                })}
+
+                {/* MOBILE CART */}
+                <Link
+                  href="/retailer/cart"
+                  onClick={closeMobileMenu}
+                  className={`flex items-center gap-3 rounded-sm px-3.5 py-3 transition-colors ${pathname.startsWith('/retailer/cart')
+                      ? 'bg-amber-300/[0.08] text-amber-300'
+                      : 'text-stone-400 hover:bg-white/[0.04] hover:text-white'
+                    }`}
+                >
+                  <ShoppingBag
+                    size={17}
+                    strokeWidth={1.6}
+                  />
+
+                  <span className="text-[10px] font-medium uppercase tracking-[0.14em]">
+                    Wholesale Cart
+                  </span>
+
+                  {cartCount > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-300 px-1.5 text-[8px] font-bold text-[#171717]">
+                      {cartCount > 99 ? '99+' : cartCount}
+                    </span>
+                  )}
+                </Link>
+              </div>
+
+              {/* MOBILE ACCOUNT LINKS */}
+              <div className="mt-4 border-t border-white/[0.07] pt-4">
+                <p className="mb-2 px-3 text-[8px] uppercase tracking-[0.2em] text-stone-600">
+                  Account
+                </p>
+
+                <div className="space-y-1">
+                  <Link
+                    href="/retailer"
+                    onClick={closeMobileMenu}
+                    className="flex items-center gap-3 rounded-sm px-3.5 py-2.5 text-stone-500 transition-colors hover:bg-white/[0.04] hover:text-stone-200"
+                  >
+                    <LayoutDashboard size={15} />
+
+                    <span className="text-[9px] uppercase tracking-[0.12em]">
+                      Dashboard
+                    </span>
+                  </Link>
+
+                  <Link
+                    href="/retailer/profile"
+                    onClick={closeMobileMenu}
+                    className="flex items-center gap-3 rounded-sm px-3.5 py-2.5 text-stone-500 transition-colors hover:bg-white/[0.04] hover:text-stone-200"
+                  >
+                    <UserCircle size={15} />
+
+                    <span className="text-[9px] uppercase tracking-[0.12em]">
+                      Business Profile
+                    </span>
+                  </Link>
+
+                  <Link
+                    href="/retailer/kyc"
+                    onClick={closeMobileMenu}
+                    className="flex items-center gap-3 rounded-sm px-3.5 py-2.5 text-stone-500 transition-colors hover:bg-white/[0.04] hover:text-stone-200"
+                  >
+                    <CreditCard size={15} />
+
+                    <span className="text-[9px] uppercase tracking-[0.12em]">
+                      KYC Details
+                    </span>
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-sm px-3.5 py-2.5 text-stone-500 transition-colors hover:bg-red-500/[0.06] hover:text-red-300"
+                  >
+                    <LogOut size={15} />
+
+                    <span className="text-[9px] uppercase tracking-[0.12em]">
+                      Sign Out
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+    </>
   );
 }

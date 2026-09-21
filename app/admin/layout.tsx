@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth/getSession";
 import { ADMIN_AREA_ROLES, canAccessAdminPath } from "@/lib/auth/roles";
+import { AdminRoleProvider } from "@/components/layout/AdminRoleContext";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -20,5 +21,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/admin/products");
   }
 
-  return <>{children}</>;
+  return <AdminRoleProvider role={user.role}>{children}</AdminRoleProvider>;
 }

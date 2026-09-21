@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { UserRole, Retailer } from '@/lib/types';
 import { Cart, MOQEvaluation, EMPTY_CART } from '@/lib/types/cart';
 import { MOCK_RETAILERS } from '@/lib/data/mockData';
@@ -74,7 +75,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return MOCK_RETAILERS[0];
   });
 
+  const pathname = usePathname();
+  const inRetailerArea = pathname?.startsWith('/retailer') ?? false;
+
   const [cart, setCart] = useState<Cart>(EMPTY_CART);
+  // Bumped on every cart write so a slow, older response can never overwrite newer state.
+  const cartRequestIdRef = useRef(0);
   const [isCartLoading, setIsCartLoading] = useState<boolean>(true);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
   const [sellerRequestProductId, setSellerRequestProductId] =
@@ -118,13 +124,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const addToast = (toast: Omit<ToastMessage, 'id'>) => {
+  // Must be referentially stable: many pages list it in useEffect deps. A new
+  // function every render made those effects re-run whenever a toast appeared,
+  // so a failed request re-fired forever and spammed error toasts.
+  const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
     const id = `toast-${Date.now()}-${Math.random().toString().slice(-4)}`;
     setToasts(prev => [...prev, { ...toast, id }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4500);
-  };
+  }, []);
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -132,26 +141,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Real, DB-backed cart ----
 
+  const applyCart = (data: Cart) => {
+    cartRequestIdRef.current++;
+    setCart(data);
+    setIsCartLoading(false);
+  };
+
   const refreshCart = useCallback(async () => {
+    const requestId = ++cartRequestIdRef.current;
     setIsCartLoading(true);
     try {
       const res = await fetch('/api/retailer/cart');
       const json = await res.json();
-      if (json.success) {
-        setCart(json.data);
-      } else {
-        setCart(EMPTY_CART);
-      }
+      if (requestId !== cartRequestIdRef.current) return; // superseded by a newer write
+      setCart(json.success ? json.data : EMPTY_CART);
     } catch {
+      if (requestId !== cartRequestIdRef.current) return;
       setCart(EMPTY_CART);
     } finally {
-      setIsCartLoading(false);
+      if (requestId === cartRequestIdRef.current) setIsCartLoading(false);
     }
   }, []);
 
+  // AppProvider lives in the root layout, so it mounts ONCE and survives client-side
+  // navigation (login -> /retailer/catalogue). Fetching only on mount meant the cart was
+  // requested while logged out (401 -> empty) and never re-fetched after login.
+  // Instead: (re)load whenever we enter the retailer area, and clear when we leave it
+  // (logout), so one user's cart can't linger for the next login.
   useEffect(() => {
-  refreshCart();
-}, [refreshCart]);
+    if (inRetailerArea) {
+      refreshCart();
+    } else {
+      cartRequestIdRef.current++;
+      setCart(EMPTY_CART);
+      setIsCartLoading(false);
+    }
+  }, [inRetailerArea, refreshCart]);
 
   const addToCart = async (productId: string, sets = 1, productName?: string, selectedSize?: string | null) => {
     try {
@@ -162,7 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       const json = await res.json();
       if (json.success) {
-        setCart(json.data);
+        applyCart(json.data);
         addToast({
           type: 'success',
           title: 'Added to Wholesale Cart',
@@ -189,7 +214,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       const json = await res.json();
       if (json.success) {
-        setCart(json.data);
+        applyCart(json.data);
       } else {
         addToast({ type: 'error', title: 'Could Not Update Cart', message: json.error || 'Please try again.' });
       }
@@ -204,7 +229,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`/api/retailer/cart/${productId}${query}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.success) {
-        setCart(json.data);
+        applyCart(json.data);
         addToast({ type: 'info', title: 'Removed Item', message: 'Product lot removed from wholesale cart.' });
       } else {
         addToast({ type: 'error', title: 'Could Not Remove Item', message: json.error || 'Please try again.' });
@@ -219,7 +244,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/retailer/cart', { method: 'DELETE' });
       const json = await res.json();
       if (json.success) {
-        setCart(json.data);
+        applyCart(json.data);
       }
     } catch {
       // leave cart state as-is; next refresh will reconcile

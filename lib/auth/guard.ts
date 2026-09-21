@@ -30,6 +30,7 @@ export async function requireVendor(request: NextRequest) {
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     include: { vendorProfile: true },
+    relationLoadStrategy: "join",
   });
 
   if (!user || !user.isActive) {
@@ -54,6 +55,7 @@ export async function requireRetailer(request: NextRequest) {
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     include: { retailerProfile: true },
+    relationLoadStrategy: "join",
   });
 
   if (!user || !user.isActive) {

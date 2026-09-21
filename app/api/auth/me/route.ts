@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
       role: user.role,
       retailerStatus: user.retailerProfile?.status,
       vendorBusinessName: user.vendorProfile?.businessName,
+      retailerBusinessName: user.retailerProfile?.businessName,
+      retailerGstin: user.retailerProfile?.gstin,
     },
   });
 }

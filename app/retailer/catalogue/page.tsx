@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Search,
   Filter,
@@ -49,7 +50,8 @@ interface CartSummary {
   items: { productId: string; sets: number }[];
 }
 
-export default function RetailerCataloguePage() {
+function RetailerCatalogueContent() {
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<RetailerProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
@@ -58,8 +60,13 @@ export default function RetailerCataloguePage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const requestIdRef = useRef(0);
+  const isFetchingRef = useRef(false);
 
   const refreshCart = useCallback(() => {
     fetch('/api/retailer/cart')
@@ -85,7 +92,10 @@ export default function RetailerCataloguePage() {
   }, [refreshCart]);
 
   const loadProducts = useCallback(async (categoryId: string, searchTerm: string, cursor?: string) => {
+    const requestId = ++requestIdRef.current;
+    isFetchingRef.current = true;
     if (cursor) setLoadingMore(true); else setLoading(true);
+
     try {
       const params = new URLSearchParams();
       if (categoryId !== 'all') params.set('categoryId', categoryId);
@@ -95,38 +105,72 @@ export default function RetailerCataloguePage() {
       const res = await fetch(`/api/retailer/products?${params.toString()}`);
       const json = await res.json();
 
+      // A newer request started (filter/search changed) - drop this response
+      if (requestId !== requestIdRef.current) return;
+
       if (json.success) {
         setProducts(prev => (cursor ? [...prev, ...json.data] : json.data));
         setNextCursor(json.nextCursor);
       }
     } catch {
-      // Leave existing products in place; nothing further to display for a failed fetch.
+      // Leave existing products in place.
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === requestIdRef.current) {
+        isFetchingRef.current = false;
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadProducts(selectedCategory, search);
+    setNextCursor(null);
+    loadProducts(selectedCategory, appliedSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
 
+  // Infinite scroll: load the next page when the sentinel enters the viewport
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !nextCursor) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isFetchingRef.current) {
+          loadProducts(selectedCategory, appliedSearch, nextCursor);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [nextCursor, selectedCategory, appliedSearch, loading, loadingMore, loadProducts]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    loadProducts(selectedCategory, search);
+    const term = search.trim();
+    setAppliedSearch(term);
+    setNextCursor(null);
+    loadProducts(selectedCategory, term);
   };
 
-  const handleLoadMore = () => {
-    if (nextCursor) {
-      loadProducts(selectedCategory, search, nextCursor);
-    }
+  const clearSearch = () => {
+    setSearch('');
+    setAppliedSearch('');
+    setNextCursor(null);
+    loadProducts(selectedCategory, '');
   };
 
   const resetFilters = () => {
     setSearch('');
-    setSelectedCategory('all');
-    loadProducts('all', '');
+    setAppliedSearch('');
+    setNextCursor(null);
+    if (selectedCategory !== 'all') {
+      setSelectedCategory('all'); // the effect above triggers the reload
+    } else {
+      loadProducts('all', '');
+    }
   };
 
   const activeFiltersCount = [
@@ -178,7 +222,7 @@ export default function RetailerCataloguePage() {
               {search && (
                 <button
                   type="button"
-                  onClick={() => { setSearch(''); loadProducts(selectedCategory, ''); }}
+                  onClick={clearSearch}
                   className="absolute right-3 top-3 text-stone-400 hover:text-stone-700"
                 >
                   <X className="w-4 h-4" />
@@ -203,11 +247,11 @@ export default function RetailerCataloguePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
 
-            <aside className={`md:col-span-3 bg-white rounded-3xl p-5 border border-stone-200 space-y-6 text-xs shadow-sm ${
+            <aside className={`md:col-span-3 bg-white rounded-xl px-4 py-6 border border-stone-200 space-y-3 text-xs shadow-sm md:sticky md:top-52 ${
               isMobileFilterOpen ? 'block' : 'hidden md:block'
             }`}>
 
-              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center justify-between pb-2 border-b border-stone-100">
                 <span className="font-serif text-sm font-bold text-stone-900 flex items-center gap-1.5">
                   <SlidersHorizontal className="w-4 h-4 text-[#831843]" /> Filter Catalogue
                 </span>
@@ -221,16 +265,18 @@ export default function RetailerCataloguePage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="font-bold text-stone-800 uppercase tracking-wider text-[10px] block">
+              <div className="space-y-1.5">
+                <label className="font-bold text-stone-500 uppercase tracking-wider text-[10px] block">
                   Category ({categories.length})
                 </label>
-                <div className="max-h-96 overflow-y-auto space-y-1 pr-1">
+                <div className="max-h-96 overflow-y-auto space-y-0.5 -mx-1 pr-1">
                   <button
                     type="button"
                     onClick={() => setSelectedCategory('all')}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition font-medium text-xs ${
-                      selectedCategory === 'all' ? 'bg-stone-900 text-white font-bold' : 'text-stone-600 hover:bg-stone-100'
+                    className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
+                      selectedCategory === 'all'
+                        ? 'bg-stone-900 text-white font-semibold'
+                        : 'text-stone-600 hover:bg-stone-100'
                     }`}
                   >
                     All Categories
@@ -240,11 +286,13 @@ export default function RetailerCataloguePage() {
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedCategory(c.id)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg transition font-medium text-xs ${
-                        selectedCategory === c.id ? 'bg-[#831843] text-white font-bold' : 'text-stone-600 hover:bg-stone-100'
+                      className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
+                        selectedCategory === c.id
+                          ? 'bg-[#831843] text-white font-semibold'
+                          : 'text-stone-600 hover:bg-stone-100'
                       }`}
                     >
-                      <span className="truncate">{c.name}</span>
+                      <span className="block truncate">{c.name}</span>
                     </button>
                   ))}
                 </div>
@@ -264,7 +312,7 @@ export default function RetailerCataloguePage() {
                 </div>
               ) : products.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {products.map((product) => (
                       <RetailerProductCard
                         key={product.id}
@@ -275,18 +323,18 @@ export default function RetailerCataloguePage() {
                     ))}
                   </div>
 
-                  {nextCursor && (
-                    <div className="text-center pt-4">
-                      <button
-                        type="button"
-                        onClick={handleLoadMore}
-                        disabled={loadingMore}
-                        className="px-6 py-2.5 bg-white border border-stone-300 rounded-xl font-bold text-xs hover:border-rose-900 transition inline-flex items-center gap-2"
-                      >
-                        {loadingMore && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        {loadingMore ? 'Loading...' : 'Load More'}
-                      </button>
+                  {nextCursor ? (
+                    <div ref={sentinelRef} className="flex justify-center items-center py-6 h-16">
+                      {loadingMore && (
+                        <span className="inline-flex items-center gap-2 text-xs text-stone-500">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Loading more designs...
+                        </span>
+                      )}
                     </div>
+                  ) : (
+                    <p className="text-center text-[11px] text-stone-400 py-6">
+                      You&apos;ve reached the end of the catalogue
+                    </p>
                   )}
                 </>
               ) : (
@@ -311,5 +359,13 @@ export default function RetailerCataloguePage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function RetailerCataloguePage() {
+  return (
+    <Suspense fallback={null}>
+      <RetailerCatalogueContent />
+    </Suspense>
   );
 }

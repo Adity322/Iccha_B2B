@@ -26,6 +26,7 @@ export default function RetailerCartPage() {
   const router = useRouter();
   const { 
     cart, 
+    isCartLoading,
     moqEvaluation, 
     clearCart, 
     openSellerModal, 
@@ -92,10 +93,36 @@ export default function RetailerCartPage() {
           </div>
 
           {/* 1. MOQ Progress & Alert Bar */}
-          <MOQProgressBar evaluation={moqEvaluation} onOpenSellerModal={openSellerModal} />
+          {!isCartLoading && (
+            <MOQProgressBar evaluation={moqEvaluation} onOpenSellerModal={openSellerModal} />
+          )}
 
           {/* 2. Main Cart Layout: Multi-Entity Split + Master Summary */}
-          {cart.items.length > 0 ? (
+          {isCartLoading && cart.items.length === 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-pulse" aria-busy="true" aria-label="Loading your cart">
+              <div className="lg:col-span-8 space-y-4">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="bg-white rounded-3xl border border-stone-200 p-5 flex gap-4">
+                    <div className="w-16 h-20 rounded-lg bg-stone-200 shrink-0" />
+                    <div className="flex-1 space-y-2.5">
+                      <div className="h-3 w-1/3 rounded bg-stone-200" />
+                      <div className="h-4 w-2/3 rounded bg-stone-200" />
+                      <div className="h-3 w-1/2 rounded bg-stone-200" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="lg:col-span-4">
+                <div className="bg-white rounded-3xl border border-stone-200 p-6 space-y-3">
+                  <div className="h-5 w-1/2 rounded bg-stone-200" />
+                  <div className="h-3 w-full rounded bg-stone-200" />
+                  <div className="h-3 w-full rounded bg-stone-200" />
+                  <div className="h-3 w-3/4 rounded bg-stone-200" />
+                  <div className="h-11 w-full rounded-2xl bg-stone-200 mt-4" />
+                </div>
+              </div>
+            </div>
+          ) : cart.items.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
               {/* Left Column: Automated Dual GST Entity Breakdown */}

@@ -395,7 +395,7 @@ export default async function HomePage() {
                       src={reel.img}
                       alt={reel.tag}
                       fill
-                      className="object-cover grayscale transition-all duration-300 ease-out opacity-70 group-hover:opacity-100 group-hover:grayscale-0"
+                      className="object-cover transition-all duration-300 ease-out opacity-70 group-hover:opacity-100"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />

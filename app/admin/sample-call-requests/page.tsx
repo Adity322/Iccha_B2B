@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { PhoneCall, CheckCircle2, XCircle, Clock, Package, User, RefreshCw } from 'lucide-react';
+import AdminSidebar from '@/components/layout/AdminSidebar';
 
 type RequestStatus = 'pending' | 'approved' | 'rejected';
 
@@ -162,8 +163,10 @@ export default function SampleCallRequestsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
-      <main className="p-6 lg:p-10">
+    <div className="flex min-h-screen bg-[#faf8f5]">
+      <AdminSidebar activeTab="sample-call-requests" />
+
+      <main className="flex-1 min-w-0 p-6 lg:p-10 overflow-y-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
           <div>

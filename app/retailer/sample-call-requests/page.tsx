@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PhoneCall, Clock, CheckCircle2, XCircle, Package, ArrowLeft, RefreshCw } from 'lucide-react';
+import RetailerHeader from '@/components/layout/RetailerHeader';
+import Footer from '@/components/layout/Footer';
 
 type SampleCallRequest = {
   id: string;
@@ -100,8 +102,10 @@ export default function SampleCallRequestsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="flex flex-col min-h-screen bg-[#faf8f5]">
+      <RetailerHeader />
+
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
@@ -249,6 +253,8 @@ export default function SampleCallRequestsPage() {
           </div>
         )}
       </main>
+
+      <Footer />
     </div>
   );
 }
