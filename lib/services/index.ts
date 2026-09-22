@@ -146,6 +146,7 @@ export const ProductService = {
       subcategory: product.subcategory || 'Cotton Prints',
       description: product.description || 'Premium wholesale apparel set.',
       fabric: product.fabric || '100% Pure Cotton',
+      minOrderSets: product.minOrderSets ?? 1,
       workType: product.workType || 'Solid Tailored',
       style: product.style || 'Straight Kurti with Pant',
       clothingType: product.clothingType || '2_piece',
