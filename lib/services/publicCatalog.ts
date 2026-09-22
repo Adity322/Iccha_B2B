@@ -71,6 +71,7 @@ function toProduct(p: DbProduct): Product {
     categoryName: p.category.name,
     subcategory: p.subcategory?.name || '',
     description: p.description || '',
+    minOrderSets: p.minOrderSets ?? 1,
     fabric: p.fabric,
     workType: p.workType,
     style: p.style,
