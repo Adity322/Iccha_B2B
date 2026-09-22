@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AppProvider } from '@/lib/context/AppContext';
 import ToastContainer from '@/components/common/ToastContainer';
-import RoleSwitcherBar from '@/components/common/RoleSwitcherBar';
 import SellerRequestModal from '@/components/cart/SellerRequestModal';
 import ChunkRecovery from '@/components/common/ChunkRecovery';
 
@@ -30,7 +29,7 @@ export default function RootLayout({
             {children}
           </div>
           <ToastContainer />
-          <RoleSwitcherBar />
+          
           <SellerRequestModal />
         </AppProvider>
       </body>

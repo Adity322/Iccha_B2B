@@ -31,11 +31,13 @@ interface KycApplication {
   gstin: string | null;
   pan: string | null;
   businessType?: string;
+  yearsInBusiness?: number;
+  annualTurnover?: string | null;
   submittedAt: string;
   reviewedAt: string | null;
   rejectionReason: string | null;
   infoRequestNotes: string | null;
-  documents: { id: string; name: string; type: string; size: string }[];
+  documents: { id: string; name: string; type: string; size: string; downloadUrl: string }[];
 }
 
 function AdminKYCContent() {
@@ -250,10 +252,17 @@ function AdminKYCContent() {
                       <span className="text-stone-400 italic">None</span>
                     ) : (
                       app.documents.map(doc => (
-                        <span key={doc.id} className="p-1.5 bg-stone-50 border border-stone-200 rounded-lg text-stone-800 text-[11px] flex items-center gap-1 font-mono">
+                        <a
+                          key={doc.id}
+                          href={doc.downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="p-1.5 bg-stone-50 border border-stone-200 rounded-lg text-stone-800 text-[11px] flex items-center gap-1 font-mono hover:bg-stone-100 hover:border-rose-300"
+                        >
                           <FileText className="w-3.5 h-3.5 text-stone-500" />
                           {doc.name}
-                        </span>
+                        </a>
                       ))
                     )}
                   </div>
@@ -325,6 +334,26 @@ function AdminKYCContent() {
                 <span className="text-stone-400 text-[10px] uppercase font-bold block">PAN Number</span>
                 <strong className="font-mono text-stone-900">{selectedApp.pan || '—'}</strong>
               </div>
+              <div>
+                <span className="text-stone-400 text-[10px] uppercase font-bold block">Email</span>
+                <strong className="text-stone-900 break-all">{selectedApp.email}</strong>
+              </div>
+              <div>
+                <span className="text-stone-400 text-[10px] uppercase font-bold block">Business Type</span>
+                <strong className="text-stone-900 capitalize">{selectedApp.businessType?.replace(/_/g, ' ') || '—'}</strong>
+              </div>
+              <div>
+                <span className="text-stone-400 text-[10px] uppercase font-bold block">Years in Business</span>
+                <strong className="text-stone-900">{selectedApp.yearsInBusiness ?? '—'}</strong>
+              </div>
+              <div>
+                <span className="text-stone-400 text-[10px] uppercase font-bold block">Annual Turnover</span>
+                <strong className="text-stone-900">{selectedApp.annualTurnover || '—'}</strong>
+              </div>
+              <div>
+                <span className="text-stone-400 text-[10px] uppercase font-bold block">Submitted</span>
+                <strong className="text-stone-900">{new Date(selectedApp.submittedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -333,14 +362,22 @@ function AdminKYCContent() {
                 <p className="text-stone-500 italic">No documents attached.</p>
               ) : (
                 selectedApp.documents.map(doc => (
-                  <div key={doc.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-[#831843]" />
-                      <div>
-                        <strong className="text-stone-900 block">{doc.name}</strong>
+                  <div key={doc.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-[#831843] shrink-0" />
+                      <div className="min-w-0">
+                        <strong className="text-stone-900 block truncate">{doc.name}</strong>
                         <span className="text-[10px] text-stone-500 font-mono">{doc.type} &bull; {doc.size}</span>
                       </div>
                     </div>
+                    <a
+                      href={doc.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 px-3 py-1.5 bg-white border border-stone-300 hover:border-rose-900 hover:text-rose-900 rounded-lg font-bold text-[11px]"
+                    >
+                      Download
+                    </a>
                   </div>
                 ))
               )}

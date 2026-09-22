@@ -27,6 +27,16 @@ interface Vendor {
   _count: { products: number };
 }
 
+interface BillingEntity {
+  id: string;
+  code: string;
+  legalName: string;
+  tradeName: string | null;
+  gstin: string;
+  state: string;
+  stateCode: string;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -87,6 +97,7 @@ interface Product {
   style: string;
   clothingType: string;
   hsnCode: string;
+  minOrderSets: number;
   media?: { mediaAsset: { publicUrl: string } }[]
   sizes?: { id: string; size: string; availableSets: number; sortOrder: number }[]
 }
@@ -99,6 +110,28 @@ export default function AdminProductsPage() {
   // view: 'vendors' = selection screen, 'products' = a vendor's (or house's) product list
   const [view, setView] = useState<'vendors' | 'products'>('vendors');
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [ownGstin, setOwnGstin] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/billing-entities')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setBillingEntities(json.data);
+      })
+      .catch(() => { }); // silent — the form still works, it just won't show a preview
+  }, []);
+
+  useEffect(() => {
+    if (currentUserRole !== 'VENDOR') return;
+    fetch('/api/vendor/profile')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setOwnGstin(json.data.gstin);
+      })
+      .catch(() => { });
+  }, [currentUserRole]);
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorsLoading, setVendorsLoading] = useState(true);
@@ -120,7 +153,6 @@ export default function AdminProductsPage() {
   const [uploading, setUploading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [currentUserChecked, setCurrentUserChecked] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
@@ -142,6 +174,7 @@ export default function AdminProductsPage() {
     style: '',
     clothingType: 'kurti_set',
     hsnCode: '621142',
+    minOrderSets: 1,
     color: '',
     description: ''
   });
@@ -325,6 +358,7 @@ export default function AdminProductsPage() {
       style: '',
       clothingType: 'kurti_set',
       hsnCode: '621142',
+      minOrderSets: 1,
       color: '',
       description: ''
     });
@@ -537,6 +571,7 @@ export default function AdminProductsPage() {
       style: formData.style,
       clothingType: formData.clothingType,
       hsnCode: formData.hsnCode,
+      minOrderSets: Number(formData.minOrderSets),
       description: formData.description
     };
 
@@ -546,11 +581,11 @@ export default function AdminProductsPage() {
       payload.stockAdjustment = requiresSize ? 0 : Math.max(0, Number(stockAddition));
       payload.sizeStockAdjustments = requiresSize
         ? sizeStockAdditions
-            .filter(row => row.size.trim() && Number(row.availableSets) > 0)
-            .map(row => ({
-              size: row.size.trim(),
-              availableSets: Number(row.availableSets),
-            }))
+          .filter(row => row.size.trim() && Number(row.availableSets) > 0)
+          .map(row => ({
+            size: row.size.trim(),
+            availableSets: Number(row.availableSets),
+          }))
         : [];
     }
 
@@ -625,6 +660,7 @@ export default function AdminProductsPage() {
       style: product.style || '',
       clothingType: product.clothingType || 'kurti_set',
       hsnCode: product.hsnCode || '621142',
+      minOrderSets: Math.max(1, Number(product.minOrderSets) || 1),
       color: product.color || '',
       description: product.description || ''
     });
@@ -772,7 +808,24 @@ export default function AdminProductsPage() {
       </div>
     );
   }
+  // Real data once the product has been saved; a same-shape preview before that, so this
+  // card can appear in both the create and edit forms.
+  const gstin = selectedVendor?.gstin ?? ownGstin;
+  const previewEntity =
+    editingProduct?.gstConfig?.billingEntity ??
+    (gstin
+      ? billingEntities.find(e => e.gstin === gstin) ?? null
+      : billingEntities.find(e => !e.code.startsWith('vendor:')) ?? null);
 
+  // GSTConfiguration.create always uses these defaults (see prisma/schema.prisma), so a
+  // brand-new product's rates are known even before the row exists.
+  const previewRates = editingProduct?.gstConfig
+    ? {
+      cgst: editingProduct.gstConfig.cgstRate,
+      sgst: editingProduct.gstConfig.sgstRate,
+      igst: editingProduct.gstConfig.igstRate,
+    }
+    : { cgst: 2.5, sgst: 2.5, igst: 5.0 };
   // ============================================================
   // PRODUCT LIST SCREEN (for selected vendor, or house products)
   // ============================================================
@@ -982,16 +1035,16 @@ export default function AdminProductsPage() {
             <div className="p-6 sm:p-8 pr-4 sm:pr-6 space-y-5 text-xs max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-stone-200 pb-3">
                 <h2 className="font-serif text-xl font-bold text-stone-900">
-                    {editingProduct
-                      ? `Edit Product${currentUserRole === 'VENDOR' ? '' : selectedVendor ? ` for ${selectedVendor.businessName}` : ''}`
-                      : `Add New Product ${currentUserRole === 'VENDOR' ? '' : selectedVendor ? `for ${selectedVendor.businessName}` : '(IcchaStore Own)'}`}
-                  </h2>
+                  {editingProduct
+                    ? `Edit Product${currentUserRole === 'VENDOR' ? '' : selectedVendor ? ` for ${selectedVendor.businessName}` : ''}`
+                    : `Add New Product ${currentUserRole === 'VENDOR' ? '' : selectedVendor ? `for ${selectedVendor.businessName}` : '(IcchaStore Own)'}`}
+                </h2>
                 <button type="button" onClick={() => {
-                     setIsModalOpen(false);
-                     setEditingProduct(null);
-                     setQrModalOpen(false);
-                     setQrToken(null)
-                   }} className="text-stone-400 font-bold text-sm">
+                  setIsModalOpen(false);
+                  setEditingProduct(null);
+                  setQrModalOpen(false);
+                  setQrToken(null)
+                }} className="text-stone-400 font-bold text-sm">
                   &times; Close
                 </button>
               </div>
@@ -1007,7 +1060,61 @@ export default function AdminProductsPage() {
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 font-medium"
                   />
                 </div>
-
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1">
+                    Minimum Order Quantity (Sets) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={formData.minOrderSets}
+                    onChange={e => setFormData({ ...formData, minOrderSets: Math.max(1, Number(e.target.value)) })}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
+                  />
+                  <p className="text-[10px] text-stone-400 mt-1">
+                    The smallest number of sets a retailer can order for this design in one go — separate from the site-wide minimum order quantity. Set to 1 if there's no per-design minimum.
+                  </p>
+                </div>
+                {previewEntity && (
+                  <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-stone-800 mb-1">
+                      <Building2 className="w-3.5 h-3.5 text-stone-500" />
+                      {editingProduct ? 'Billed Under (auto-assigned, read-only)' : 'Will Be Billed Under'}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-stone-400 block">Entity</span>
+                        <span className="font-semibold text-stone-800">
+                          {previewEntity.tradeName || previewEntity.legalName}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-stone-400 block">GSTIN</span>
+                        <span className="font-mono font-semibold text-stone-800">
+                          {previewEntity.gstin}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-stone-400 block">State</span>
+                        <span className="font-semibold text-stone-800">
+                          {previewEntity.state} ({previewEntity.stateCode})
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-stone-400 block">Tax Rates (CGST/SGST/IGST)</span>
+                        <span className="font-semibold text-stone-800">
+                          {previewRates.cgst}% / {previewRates.sgst}% / {previewRates.igst}%
+                        </span>
+                      </div>
+                    </div>
+                    {!editingProduct && (
+                      <p className="text-[10px] text-stone-400 pt-1">
+                        Resolved automatically from the product owner when you save — this cannot be changed manually.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <label className="block font-bold text-stone-800">Product Photos {editingProduct ? '(optional while editing)' : '* (minimum 2)'}</label>
@@ -1028,15 +1135,14 @@ export default function AdminProductsPage() {
                     }}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-[11px]"
                   />
-                  <p className={`text-[10px] mt-1 ${
-                      !editingProduct && imageFiles.length + qrMediaAssets.length < 2
-                        ? 'text-amber-700'
-                        : 'text-emerald-700'
+                  <p className={`text-[10px] mt-1 ${!editingProduct && imageFiles.length + qrMediaAssets.length < 2
+                    ? 'text-amber-700'
+                    : 'text-emerald-700'
                     }`}>
-                      {imageFiles.length + qrMediaAssets.length} photo{imageFiles.length + qrMediaAssets.length === 1 ? '' : 's'} selected
-                      {!editingProduct && imageFiles.length + qrMediaAssets.length < 2 && ' — at least 2 required'}
-                      {editingProduct && ' — existing photos will be preserved'}
-                    </p>
+                    {imageFiles.length + qrMediaAssets.length} photo{imageFiles.length + qrMediaAssets.length === 1 ? '' : 's'} selected
+                    {!editingProduct && imageFiles.length + qrMediaAssets.length < 2 && ' — at least 2 required'}
+                    {editingProduct && ' — existing photos will be preserved'}
+                  </p>
                   {(imageFiles.length > 0 || qrMediaAssets.length > 0) && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {qrMediaAssets.map((asset, idx) => (
@@ -1158,18 +1264,6 @@ export default function AdminProductsPage() {
                       No categories loaded — the categories API may not exist yet.
                     </p>
                   )}
-                </div>
-
-                <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-                  <label className="block font-bold text-stone-800 mb-1">Billing Entity</label>
-                  <p className="text-xs text-stone-600">
-                    {selectedVendor
-                      ? `Automatically assigned from ${selectedVendor.businessName}'s vendor GST/billing details.`
-                      :  "Automatically assigned from IcchaStore's platform billing entity."}
-                      </p>
-                  <p className="text-[10px] text-stone-400 mt-1">
-                    The backend resolves the billing entity from the product owner, so it cannot be accidentally assigned to another vendor.
-                  </p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>

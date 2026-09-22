@@ -63,9 +63,7 @@ const SHARED_LINKS: NavLink[] = [
 
 const STAFF_ONLY_TRAILING_LINKS: NavLink[] = [
   { label: 'Categories', href: '/admin/categories', icon: FolderTree },
-  { label: 'Inventory & Sets', href: '/admin/inventory', icon: Boxes },
   { label: 'MOQ Rules', href: '/admin/moq-rules', icon: Sliders },
-  { label: 'Billing & Settings', href: '/admin/settings', icon: ReceiptText },
 ];
 
 export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {

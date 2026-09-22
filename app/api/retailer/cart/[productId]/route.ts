@@ -51,6 +51,18 @@ export async function PATCH(
     return NextResponse.json({ success: false, error: "Item not found in your cart" }, { status: 404 });
   }
 
+  // Per-product minimum, set by the vendor (or admin for house products). A retailer can
+  // remove the line entirely (DELETE) but can't shrink it below this floor.
+  if (sets < item.product.minOrderSets) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `This product has a minimum order of ${item.product.minOrderSets} set(s). Remove the item instead if you want fewer than that.`,
+      },
+      { status: 400 }
+    );
+  }
+
   const maxSets = item.product.category.requiresSize
     ? item.product.sizes.find((row) => row.size.toLowerCase() === selectedSize.toLowerCase())?.availableSets ?? 0
     : item.product.availableSets;

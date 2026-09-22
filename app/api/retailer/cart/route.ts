@@ -86,6 +86,18 @@ export async function POST(request: NextRequest) {
       data: { sets: newSets },
     });
   } else {
+    // A brand-new line for this product (+ size) must meet the product's own
+    // per-product minimum, set by the vendor (or admin for house products) —
+    // separate from, and in addition to, the cart-wide MOQ.
+    if (sets < product.minOrderSets) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `This product has a minimum order of ${product.minOrderSets} set(s). Please add at least ${product.minOrderSets} set(s).`,
+        },
+        { status: 400 }
+      );
+    }
     await prisma.cartItem.create({
       data: { cartId: cart.id, productId, sets, selectedSize: normalizedSize },
     });

@@ -166,6 +166,7 @@ export interface Product {
   wholesalePricePerSet: number;
   availableSets: number;
   totalAvailablePieces: number;
+  minOrderSets: number;
   sizeCombination: string; // e.g., 'M-38, L-40, XL-42, XXL-44'
   sizes: string[];
   colors: string[];

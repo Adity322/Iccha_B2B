@@ -15,6 +15,8 @@ function formatApplication(app: any) {
     gstin: app.gstin,
     pan: app.pan,
     businessType: app.retailerProfile?.businessType,
+    yearsInBusiness: app.retailerProfile?.yearsInBusiness,
+    annualTurnover: app.retailerProfile?.annualTurnover,
     submittedAt: app.submittedAt,
     reviewedAt: app.reviewedAt,
     rejectionReason: app.rejectionReason,
@@ -24,6 +26,7 @@ function formatApplication(app: any) {
       name: d.originalFilename,
       type: d.documentType,
       size: `${(d.fileSize / (1024 * 1024)).toFixed(2)} MB`,
+      downloadUrl: `/api/admin/kyc/documents/${d.id}/download`,
     })),
   };
 }
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
       where: { id },
       include: {
         documents: true,
-        retailerProfile: { select: { businessName: true, businessType: true } },
+        retailerProfile: { select: { businessName: true, businessType: true, yearsInBusiness: true, annualTurnover: true } },
       },
     });
 
@@ -72,12 +75,12 @@ export async function GET(request: NextRequest) {
 
   const applications = await prisma.kYCApplication.findMany({
     where,
-    orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+    orderBy: [{ status: "asc" }, { submittedAt: "desc" }, { id: "desc" }], 
     take: PAGE_SIZE + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: {
       documents: true,
-      retailerProfile: { select: { businessName: true, businessType: true } },
+      retailerProfile: { select: { businessName: true, businessType: true, yearsInBusiness: true, annualTurnover: true } },
     },
   });
 

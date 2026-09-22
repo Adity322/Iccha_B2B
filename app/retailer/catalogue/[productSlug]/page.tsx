@@ -49,6 +49,7 @@ export default function RetailerProductDetailPage() {
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [setsToAdd, setSetsToAdd] = useState(1);
+  const [hasInitializedSets, setHasInitializedSets] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,6 +79,17 @@ export default function RetailerProductDetailPage() {
 
     load();
   }, [productSlug]);
+
+  // Initialize the starting quantity when a product is loaded.
+  // This hook is intentionally above the conditional returns so hook order
+  // remains identical on every render.
+  useEffect(() => {
+    if (!product) return;
+
+    const minOrderSets = Math.max(1, product.minOrderSets || 1);
+    setSetsToAdd(minOrderSets);
+    setHasInitializedSets(true);
+  }, [product]);
 
   if (loading) {
     return (
@@ -145,12 +157,17 @@ export default function RetailerProductDetailPage() {
     ? (product.sizeStocks || []).find((row) => row.size === selectedSize)?.availableSets || 0
     : product.availableSets;
 
+  // Per-product minimum, set by the vendor (or admin for house products) — separate from,
+  // and in addition to, the cart-wide MOQ. A fresh cart line for this product can't go
+  // below it, so the stepper starts here instead of at 1.
+  const minOrderSets = Math.max(1, product.minOrderSets || 1);
+
   const increaseSets = () => {
     setSetsToAdd((current) => Math.min(selectedSizeStock, current + 1));
   };
 
   const decreaseSets = () => {
-    setSetsToAdd((current) => Math.max(1, current - 1));
+    setSetsToAdd((current) => Math.max(minOrderSets, current - 1));
   };
 
   return (
@@ -403,7 +420,10 @@ export default function RetailerProductDetailPage() {
                             key={row.size}
                             type="button"
                             disabled={outOfStock}
-                            onClick={() => { setSelectedSize(row.size); setSetsToAdd(1); }}
+                            onClick={() => {
+                              setSelectedSize(row.size);
+                              setSetsToAdd(minOrderSets);
+                            }}
                             className={`p-3 rounded-xl border-2 transition-all ${
                               isSelected
                                 ? 'border-amber-500 bg-amber-50 shadow-sm'
@@ -452,7 +472,7 @@ export default function RetailerProductDetailPage() {
                       <button
                         type="button"
                         onClick={decreaseSets}
-                        disabled={setsToAdd <= 1}
+                        disabled={setsToAdd <= minOrderSets}
                         className="p-3 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed text-stone-700 transition"
                         aria-label="Decrease sets"
                       >
@@ -484,7 +504,7 @@ export default function RetailerProductDetailPage() {
                     <button
                       type="button"
                       onClick={handleAddToCart}
-                      disabled={product.availableSets < 1 || (product.categoryRequiresSize && !selectedSize) || selectedSizeStock < 1}
+                      disabled={!hasInitializedSets || product.availableSets < 1 || (product.categoryRequiresSize && !selectedSize) || selectedSizeStock < 1 || selectedSizeStock < minOrderSets}
                       className="flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#831843] to-[#9a3412] hover:from-[#701a75] hover:to-[#852e10] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-2"
                     >
                       <ShoppingBag className="w-4 h-4 text-amber-300" />
@@ -496,6 +516,21 @@ export default function RetailerProductDetailPage() {
                       </span>
                     </button>
                   </div>
+
+                  {/* Minimum order notice */}
+                  {minOrderSets > 1 && (
+                    <p className="text-[11px] text-stone-500">
+                      Minimum order for this design: <strong className="text-stone-800">{minOrderSets} sets</strong>.
+                    </p>
+                  )}
+
+                  {selectedSizeStock > 0 && selectedSizeStock < minOrderSets && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                      Only {selectedSizeStock} set{selectedSizeStock > 1 ? 's' : ''} left
+                      {product.categoryRequiresSize && selectedSize ? ` in size ${selectedSize}` : ''}
+                      — below the {minOrderSets}-set minimum for this design, so it can&apos;t be ordered right now.
+                    </p>
+                  )}
 
                   {/* Existing Cart */}
                   {existingSets > 0 && (

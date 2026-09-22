@@ -530,7 +530,7 @@ export default function AdminDashboardPage() {
                           </span>
 
                           <Link
-                            href={`/admin/orders?orderId=${order.id}`}
+                            href={`/admin/orders/${order.id}`}
                             className="text-[11px] font-bold text-stone-700 hover:text-stone-900 underline mt-1 inline-block"
                           >
                             Manage

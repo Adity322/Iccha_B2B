@@ -12,6 +12,7 @@ export interface CartItemProductSummary {
   requiresSize: boolean;
   sizeStocks: { size: string; availableSets: number }[];
   availableSets: number;
+  minOrderSets: number;
   isActive: boolean;
   vendorName: string;
   gstRate: number;

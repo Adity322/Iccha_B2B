@@ -67,6 +67,9 @@ export async function GET(
       wholesalePricePerPiece: Number(product.wholesalePricePerPiece),
       wholesalePricePerSet: Number(product.wholesalePricePerSet),
       availableSets: product.availableSets,
+      // Minimum sets a retailer must add for THIS product in one cart line — separate from,
+      // and in addition to, the cart-wide MOQ. Set by the vendor (or admin for house products).
+      minOrderSets: product.minOrderSets,
       sizeCombination: product.sizeCombination,
       sizeStocks: product.sizes.map((row) => ({
         size: row.size,

@@ -110,6 +110,7 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
                 requiresSize: p.category.requiresSize,
                 sizeStocks: p.sizes.map((row) => ({ size: row.size, availableSets: row.availableSets })),
                 availableSets: p.availableSets,
+                minOrderSets: p.minOrderSets,
                 isActive: p.isActive,
                 vendorName: p.vendor?.businessName || "IcchaStore",
                 gstRate,

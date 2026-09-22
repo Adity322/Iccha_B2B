@@ -26,6 +26,7 @@ const productFieldsSchema = z.object({
         MIN_STOCK_SETS,
         `Minimum stock is ${MIN_STOCK_SETS} sets.`
     ),
+    minOrderSets: z.number().int().min(1, "Minimum order quantity must be at least 1 set.").default(1),
 
     sizeCombination: z.string().optional(),
     sizeStocks: z.array(z.object({
@@ -304,6 +305,7 @@ export async function POST(request: NextRequest) {
                 piecesPerSet: data.piecesPerSet,
                 wholesalePricePerSet: data.wholesalePricePerSet,
                 availableSets: totalAvailableSets,
+                minOrderSets: data.minOrderSets,
                 totalAvailablePieces,
                 gstConfigId,
                 sizeCombination: category.requiresSize
@@ -590,6 +592,7 @@ export async function PATCH(request: NextRequest) {
                         piecesPerSet: data.piecesPerSet,
                         wholesalePricePerSet: data.wholesalePricePerSet,
                         availableSets: totalAvailableSets,
+                        minOrderSets: data.minOrderSets,
                         totalAvailablePieces,
                         sizeCombination: finalSizes.map((row) => row.size).join(", "),
                         color: data.color,
@@ -672,6 +675,7 @@ export async function PATCH(request: NextRequest) {
                 piecesPerSet: data.piecesPerSet,
                 wholesalePricePerSet: data.wholesalePricePerSet,
                 availableSets: totalAvailableSets,
+                minOrderSets: data.minOrderSets,
                 totalAvailablePieces,
 
                 sizeCombination: category.requiresSize

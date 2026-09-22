@@ -156,14 +156,23 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
                         <button
                           type="button"
                           onClick={() => updateCartItemSets(item.productId, item.selectedSets - 1, item.selectedSize)}
-                          className="p-2 hover:bg-stone-100 text-stone-600 transition"
+                          disabled={item.selectedSets <= item.product.minOrderSets}
+                          className="p-2 hover:bg-stone-100 text-stone-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition"
                           aria-label="Decrease sets"
+                          title={
+                            item.selectedSets <= item.product.minOrderSets
+                              ? `Minimum order for this design is ${item.product.minOrderSets} sets — remove it instead if you need fewer`
+                              : undefined
+                          }
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
                         <div className="px-3 text-xs font-bold text-stone-800 text-center min-w-[55px]">
                           <div>{item.selectedSets} Sets</div>
                           <div className="text-[9px] text-stone-400 font-normal">{item.totalPieces} pcs</div>
+                          {item.product.minOrderSets > 1 && (
+                            <div className="text-[9px] text-stone-400 font-normal">Min {item.product.minOrderSets}</div>
+                          )}
                         </div>
                         <button
                           type="button"
