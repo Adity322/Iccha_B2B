@@ -58,11 +58,19 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const force = new URL(request.url).searchParams.get("force") === "true";
 
     const productCount = await prisma.product.count({ where: { categoryId: id } });
-    if (productCount > 0) {
+    // First hit without ?force=true: report the count so the client can
+    // show a confirmation popup instead of failing outright.
+    if (productCount > 0 && !force) {
       return NextResponse.json(
-        { success: false, error: `Cannot delete — ${productCount} product(s) still use this category` },
+        {
+          success: false,
+          requiresConfirmation: true,
+          productCount,
+          error: `This category has ${productCount} product${productCount === 1 ? "" : "s"}. Deleting it will permanently delete ${productCount === 1 ? "that product" : "all of them"} too.`,
+        },
         { status: 409 }
       );
     }

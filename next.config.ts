@@ -44,6 +44,12 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/api/media/**",
       },
+      {
+        protocol: "https",
+        hostname: "iccha.bestofall.in",
+        port: "",
+        pathname: "/**",
+      },
     ],
   },
   output: 'standalone',
