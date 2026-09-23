@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db";
 import { requireStaff, requireVendor } from "@/lib/auth/guard";
 
@@ -123,6 +124,12 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      return NextResponse.json(
+        { success: false, error: "This product is still referenced by another record and cannot be deleted." },
+        { status: 409 }
+      );
+    }
     console.error("Delete product error:", error);
     return NextResponse.json(
       { success: false, error: "Something went wrong. Please try again." },

@@ -8,12 +8,15 @@ const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024;
 async function loadSession(token: string) {
   return prisma.productUploadSession.findUnique({
     where: { token },
-    include: { vendor: { select: { businessName: true } } },
+    include: {
+      vendor: { select: { businessName: true } },
+      mediaAssets: { include: { mediaAsset: true } },
+    },
   });
 }
 
-// GET — lets the mobile page greet the vendor by name and know whether this
-// link has already been used or has expired, before showing the camera UI.
+// GET — unchanged in spirit, but now also tells the client how many photos
+// are already attached (useful if they reload the page mid-session).
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const session = await loadSession(token);
@@ -22,17 +25,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: false, error: "This upload link is invalid." }, { status: 404 });
   }
   if (session.status === "uploaded") {
-    return NextResponse.json({ success: true, data: { status: "uploaded", vendorName: session.vendor.businessName } });
+    return NextResponse.json({
+      success: true,
+      data: { status: "uploaded", vendorName: session.vendor.businessName, photoCount: session.mediaAssets.length },
+    });
   }
   if (session.expiresAt < new Date()) {
     return NextResponse.json({ success: true, data: { status: "expired", vendorName: session.vendor.businessName } });
   }
 
-  return NextResponse.json({ success: true, data: { status: "pending", vendorName: session.vendor.businessName } });
+  return NextResponse.json({
+    success: true,
+    data: { status: "pending", vendorName: session.vendor.businessName, photoCount: session.mediaAssets.length },
+  });
 }
 
-// POST — the phone submits the photo here. Public/unauthenticated on purpose:
-// the unguessable token *is* the credential, and it's single-use + short-lived.
+// POST — accepts one file per call, but no longer marks the session
+// "uploaded" or rejects further calls. It just appends to the session's
+// photo list. The session is only finalized by PATCH (see below).
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
@@ -42,7 +52,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: "This upload link is invalid." }, { status: 404 });
     }
     if (session.status === "uploaded") {
-      return NextResponse.json({ success: false, error: "A photo has already been uploaded for this link." }, { status: 409 });
+      return NextResponse.json({ success: false, error: "This session has already been finished." }, { status: 409 });
     }
     if (session.expiresAt < new Date()) {
       return NextResponse.json({ success: false, error: "This upload link has expired. Please generate a new QR code." }, { status: 410 });
@@ -84,14 +94,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
     });
 
-    await prisma.productUploadSession.update({
-      where: { token },
-      data: { status: "uploaded", mediaAssetId: mediaAsset.id },
+    await prisma.productUploadSessionAsset.create({
+      data: { sessionId: session.id, mediaAssetId: mediaAsset.id },
     });
 
     return NextResponse.json({ success: true, data: { mediaAssetId: mediaAsset.id } });
   } catch (error) {
     console.error("Mobile upload error:", error);
     return NextResponse.json({ success: false, error: "Upload failed. Please try again." }, { status: 500 });
+  }
+}
+
+// PATCH — the client calls this once the user taps "Done" on the phone.
+// This is the ONLY place status flips to "uploaded", finalizing the session.
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  try {
+    const { token } = await params;
+    const session = await loadSession(token);
+
+    if (!session) {
+      return NextResponse.json({ success: false, error: "This upload link is invalid." }, { status: 404 });
+    }
+    if (session.status === "uploaded") {
+      return NextResponse.json({ success: true, data: { status: "uploaded" } });
+    }
+    if (session.mediaAssets.length === 0) {
+      return NextResponse.json({ success: false, error: "Upload at least one photo before finishing." }, { status: 400 });
+    }
+
+    await prisma.productUploadSession.update({
+      where: { token },
+      data: { status: "uploaded" },
+    });
+
+    return NextResponse.json({ success: true, data: { status: "uploaded", photoCount: session.mediaAssets.length } });
+  } catch (error) {
+    console.error("Mobile upload finish error:", error);
+    return NextResponse.json({ success: false, error: "Could not finish this session. Please try again." }, { status: 500 });
   }
 }

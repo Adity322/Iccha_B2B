@@ -291,7 +291,6 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
         </nav>
 
         <div className="p-3 border-t border-stone-800 bg-stone-900/60 space-y-2 shrink-0">
-
           <Link
             href="/"
             className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium bg-stone-800 hover:bg-stone-700 text-stone-200 transition"
