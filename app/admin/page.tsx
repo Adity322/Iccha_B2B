@@ -127,7 +127,7 @@ export default function AdminDashboardPage() {
       if (!response.ok || !result.success) {
         throw new Error(
           result.error?.message ||
-            'Failed to load dashboard'
+          'Failed to load dashboard'
         );
       }
 
@@ -161,7 +161,7 @@ export default function AdminDashboardPage() {
   const metrics = dashboard?.metrics;
 
   return (
-    <div className="flex min-h-screen bg-[#faf8f5]">
+    <div className="flex max-h-screen bg-[#faf8f5]">
       <AdminSidebar activeTab="dashboard" />
 
       <main className="flex-1 p-6 lg:p-10 space-y-8 overflow-y-auto">

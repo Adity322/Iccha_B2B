@@ -3,9 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth/guard';
 import { AdminDashboardService } from '@/lib/services/adminDashboardService';
 
-export async function GET(
-  request: NextRequest
-) {
+export async function GET(request: NextRequest) {
   // -----------------------------------------------------------
   // Authenticate admin/staff
   // -----------------------------------------------------------
@@ -36,7 +34,7 @@ export async function GET(
 
       error: null,
     });
-  } catch (error) {
+  } catch (error:any) {
     console.error(
       'Admin dashboard API error:',
       error
