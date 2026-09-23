@@ -52,20 +52,6 @@ export default async function CategoryDetailPage({ params }: CategoryDetailPageP
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
               
               <div className="md:col-span-8 space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full text-white ${
-                    category.billingEntityId === 'entity_a' ? 'bg-[#831843]' : 'bg-[#9a3412]'
-                  }`}>
-                    {category.billingEntityId === 'entity_a' ? 'Surat Division (GST Entity A)' : 'Jaipur Division (GST Entity B)'}
-                  </span>
-                  <span className="text-xs bg-stone-100 text-stone-700 px-2.5 py-1 rounded-full font-medium">
-                    {category.type === '3_piece' ? '3-Piece Set' : category.type === '2_piece' ? '2-Piece Set' : 'Kurti Collection'}
-                  </span>
-                  <span className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
-                    GST Rate: 5% Apparel
-                  </span>
-                </div>
-
                 <h1 className="font-serif text-3xl sm:text-4xl font-bold text-stone-900">
                   {category.name}
                 </h1>
@@ -74,19 +60,6 @@ export default async function CategoryDetailPage({ params }: CategoryDetailPageP
                   {category.description}
                 </p>
 
-                {/* Subcategories */}
-                <div className="pt-1">
-                  <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider block mb-2">
-                    Subcategories & Cuts:
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {category.subcategories.map((sub, idx) => (
-                      <span key={idx} className="text-xs bg-stone-50 border border-stone-200 px-3 py-1 rounded-lg text-stone-800 font-medium">
-                        {sub}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               {/* Visual Thumbnail */}
@@ -101,27 +74,6 @@ export default async function CategoryDetailPage({ params }: CategoryDetailPageP
               </div>
 
             </div>
-          </div>
-
-          {/* Wholesale Lock Banner */}
-          <div className="p-4 bg-stone-900 text-stone-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 shadow-md">
-            <div className="flex items-center gap-3 text-xs">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
-                <Lock className="w-4 h-4" />
-              </div>
-              <div>
-                <strong className="text-white block">Representative Designs for {category.name}</strong>
-                <span className="text-stone-400">
-                  Live inventory lots, size ratios (M-XXL), and wholesale piece prices unlock once your retailer KYC is approved.
-                </span>
-              </div>
-            </div>
-            <Link
-              href="/register"
-              className="px-4 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-semibold rounded-xl shadow transition whitespace-nowrap"
-            >
-              Apply for Retailer Access
-            </Link>
           </div>
 
           {/* Product Listing */}

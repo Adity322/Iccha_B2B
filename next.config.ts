@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
 
   images: {
     remotePatterns: [
+            
+      {
+        protocol: 'https',
+        hostname: 'iccha.bestofall.in',
+        port: '',
+        pathname: '/**', // This allows any path under the hostname
+      },
+
       {
         protocol: "https",
         hostname: "picsum.photos",
