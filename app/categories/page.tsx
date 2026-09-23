@@ -39,23 +39,12 @@ export default async function CategoriesPage() {
                 Wholesale Product Lines
               </span>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold text-stone-900">
-                {categories.length} Women&apos;s Kurti Categories
+                {categories.length} Categories
               </h1>
               <p className="text-sm text-stone-600 leading-relaxed">
                 Browse our complete wholesale directory of stitched 2-piece and 3-piece kurti sets. All categories are manufactured in-house across our Surat and Jaipur production facilities.
               </p>
               
-              <div className="pt-2 flex flex-wrap items-center gap-4 text-xs text-stone-600">
-                <span className="px-3 py-1 bg-stone-100 rounded-full font-medium">
-                  {categories.length} Wholesale Categories
-                </span>
-                <span className="px-3 py-1 bg-rose-50 text-rose-900 rounded-full font-medium">
-                  2-Piece Kurti Pant Sets
-                </span>
-                <span className="px-3 py-1 bg-amber-50 text-amber-900 rounded-full font-medium">
-                  3-Piece Kurti Pant & Dupatta Sets
-                </span>
-              </div>
             </div>
           </div>
 
@@ -78,25 +67,13 @@ export default async function CategoriesPage() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-transparent" />
 
-                  {/* Division Tag */}
-                  <div className="absolute top-3 left-3 bg-stone-900/85 backdrop-blur-md text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow flex items-center gap-1">
-                    <Building2 className="w-3 h-3 text-amber-400" />
-                    {category.billingEntityId === 'entity_a' ? 'Surat Hub (GST A)' : 'Jaipur Hub (GST B)'}
-                  </div>
-
                   {/* Clothing Type Badge */}
                   <div className="absolute top-3 right-3 bg-white/90 text-stone-900 text-[10px] font-bold px-2 py-0.5 rounded shadow">
                     {category.type === '3_piece' ? '3-Pc Set' : category.type === '2_piece' ? '2-Pc Set' : 'Kurti Lot'}
                   </div>
-
-                  <div className="absolute bottom-3 left-3 right-3 text-white">
-                    <span className="text-[10px] font-bold uppercase text-amber-300 tracking-wider block">
-                      {category.itemCount}+ Available Designs
-                    </span>
-                    <h3 className="font-serif text-base font-bold leading-tight mt-0.5">
+                    <h3 className="absolute bottom-3 left-3 text-white text-xl font-serif line-clamp-2 font-bold leading-tight mt-0.5">
                       {category.name}
                     </h3>
-                  </div>
                 </div>
 
                 {/* Category Body */}
@@ -105,7 +82,11 @@ export default async function CategoriesPage() {
                     <p className="text-xs text-stone-600 leading-relaxed line-clamp-2">
                       {category.description}
                     </p>
-
+                                <div className="text-white">
+                    <span className="text-[10px] font-bold uppercase text-amber-300 tracking-wider block">
+                      {category.itemCount}+ Available Designs
+                    </span>
+                  </div>
                     {/* Subcategory Pills */}
                     <div className="flex flex-wrap gap-1 pt-1">
                       {category.subcategories.slice(0, 3).map((sub, idx) => (

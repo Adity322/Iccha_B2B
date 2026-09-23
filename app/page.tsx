@@ -3,7 +3,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowRight,
-  Play,
   Instagram,
   ChevronRight,
   Scissors,
@@ -18,7 +17,7 @@ import RevealInit from '@/components/ui/RevealInit';
 import CategoryRail from '@/components/category/CategoryRail';
 // import { ProductService, CategoryService } from '@/lib/services';
 import { PublicCatalogService } from '@/lib/services/publicCatalog';
-
+import Showcase from '@/components/hero/Showcase';
 /**
  * ────────────────────────────────────────────────────────────────────────
  * REDESIGN NOTES
@@ -296,77 +295,7 @@ export default async function HomePage() {
         <section className="relative bg-black text-white overflow-hidden border-t border-white/10">
 
           {/* Full-bleed photo hero: image IS the background, copy + CTA sit on top of it */}
-          <div className="relative min-h-[600px] sm:min-h-[680px] flex items-end">
-            <Image
-              src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=1800&auto=format&fit=crop&q=85"
-              alt="IcchaStore kurti production and craft"
-              fill
-              sizes="100vw"
-              className="object-cover object-[center_25%] grayscale-[15%]"
-              referrerPolicy="no-referrer"
-            />
-            {/* Left-to-right + bottom fades so copy stays legible against the photo */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/55 to-black/10" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
-            <div className="absolute inset-0 shadow-[inset_0_0_14vw_4vw_rgba(0,0,0,0.55)]" />
-
-            <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
-              <div className="max-w-xl">
-                <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-7xl font-normal text-white tracking-tight leading-[0.98] mb-6">
-                  Stitched.
-                  <br />
-                  Inspected. Shipped.
-                </h2>
-
-                <p
-                  className="reveal text-[15px] text-white/70 leading-relaxed"
-                  style={{ '--reveal-delay': '80ms' } as React.CSSProperties}
-                >
-                  Watch how every kurti lot goes through 4-point fabric inspection,
-                  lock-stitch reinforcement, interlock seam overcasting, and pressing
-                  before packing.
-                </p>
-
-                <div
-                  className="reveal space-y-3 text-[15px] text-white border-t border-white/15 mt-6 pt-5"
-                  style={{ '--reveal-delay': '140ms' } as React.CSSProperties}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-1 h-1 rounded-full bg-white shrink-0 mt-2" />
-                    <span>Liva-certified heavy 14kg rayon and 60x60 cambric cotton</span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-1 h-1 rounded-full bg-white/60 shrink-0 mt-2" />
-                    <span>Original zari weaving and pure organza cutwork embroidery</span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <span className="w-1 h-1 rounded-full bg-white/30 shrink-0 mt-2" />
-                    <span>Guaranteed colorfastness and zero shrinkage stitching allowance</span>
-                  </div>
-                </div>
-
-                <div
-                  className="reveal flex flex-wrap items-center gap-5 mt-8"
-                  style={{ '--reveal-delay': '200ms' } as React.CSSProperties}
-                >
-                  <Link href="/videos" className={btnOnDark}>
-                    Watch factory videos
-                  </Link>
-
-                  <Link href="/videos" className="inline-flex items-center gap-3 group">
-                    <span className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shrink-0 transition-transform duration-200 ease-out group-hover:scale-110">
-                      <Play className="w-4 h-4 fill-black translate-x-0.5" />
-                    </span>
-                    <span className="text-[13px] text-white/70 group-hover:text-white transition-colors duration-200">
-                      Surat facility —
-                      <br />
-                      3-piece festive set inspection
-                    </span>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
+          <Showcase />
 
           {/* Instagram / Lookbooks Gallery Strip */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
@@ -381,21 +310,21 @@ export default async function HomePage() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                  { img: 'https://images.unsplash.com/photo-1596783074418-9752b578d665?w=600', tag: 'Alia cut lot' },
-                  { img: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=600', tag: 'Jaipuri cotton' },
-                  { img: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=600', tag: 'Nayra cut sets' },
-                  { img: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600', tag: 'Chanderi 3-pc' },
+                  { img: 'https://images.unsplash.com/photo-1752653425039-cf1ff22d61bc?&w=1287', tag: 'Alia cut lot' },
+                  { img: 'https://images.unsplash.com/photo-1683600209750-e01db74c47ca?w=1227', tag: 'Jaipuri cotton' },
+                  { img: 'https://assets0.mirraw.com/images/12933692/IMG-20241028-WA0005_(1)_zoom.jpg?1730135586', tag: 'Nayra cut sets' },
+                  { img: 'https://cult91.com/cdn/shop/files/beburst_gen_1781952084070_0.png?v=1782193810&width=1696', tag: 'Chikankari set' },
                 ].map((reel, idx) => (
                   <div
                     key={idx}
                     className="reveal relative aspect-[9/16] overflow-hidden bg-white/5 border border-white/10 group"
                     style={{ '--reveal-delay': `${idx * 70}ms` } as React.CSSProperties}
                   >
-                    <Image
+                    <img
                       src={reel.img}
                       alt={reel.tag}
-                      fill
-                      className="object-cover transition-all duration-300 ease-out opacity-70 group-hover:opacity-100"
+                      // fill
+                      className="object-cover w-full h-full absolute inset-0 transition-all duration-300 ease-out opacity-70 group-hover:opacity-100"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
@@ -420,10 +349,8 @@ export default async function HomePage() {
               इ
             </div>
 
-            <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-7xl font-normal text-black tracking-tight leading-[1.02] mb-6">
+            <h2 className="reveal font-serif text-5xl sm:text-6xl lg:text-8xl font-normal text-black tracking-tight leading-[1.02] mb-6">
               Ready to stock
-              <br />
-              curated kurti sets?
             </h2>
 
             <p className="reveal text-base text-neutral-500 max-w-lg mx-auto leading-relaxed mb-10">
