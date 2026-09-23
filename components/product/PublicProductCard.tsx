@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
@@ -10,6 +10,40 @@ interface PublicProductCardProps {
   product: Product;
 }
 
+interface AuthMeUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  retailerStatus?: string;
+  vendorBusinessName?: string;
+  retailerBusinessName?: string;
+  retailerGstin?: string;
+}
+
+// Every card on a listing page mounts at roughly the same time, so without
+// this the grid would fire one /api/auth/me request per card. Cache the
+// in-flight promise at module scope so all instances share one request.
+let authMeCache: Promise<AuthMeUser | null> | null = null;
+
+function fetchAuthMe(): Promise<AuthMeUser | null> {
+  if (!authMeCache) {
+    authMeCache = fetch('/api/auth/me')
+      .then(res => (res.ok ? res.json() : { success: false }))
+      .then(json => (json.success ? (json.data as AuthMeUser) : null))
+      .catch(() => null);
+  }
+  return authMeCache;
+}
+
+// Roles that should see full wholesale pricing instead of "Unlock rates".
+// VENDOR is deliberately excluded - vendors sell on the platform, they
+// aren't wholesale buyers of this catalogue. Move it into this list if
+// that assumption is wrong for your case.
+const PRIVILEGED_ROLES = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_MANAGER', 'RETAILER'];
+
+type AuthStatus = 'checking' | 'privileged' | 'guest';
+
 /**
  * Photo-first card with a floating frosted info panel.
  *
@@ -17,10 +51,28 @@ interface PublicProductCardProps {
  * - Dark glass (not white glass) so text stays readable on bright photos.
  * - Nothing in the footer can wrap: the price is masked in the meta row and the
  *   CTA is one full-width pill, so the layout survives narrow 4-up columns.
+ * - Logged-in retailers see wholesale price/set details instead of the
+ *   "Unlock rates" upsell. `Product` already carries those fields (sku,
+ *   wholesalePricePerPiece, wholesalePricePerSet, piecesPerSet,
+ *   availableSets); the public product-fetch just doesn't populate them,
+ *   so they come through as undefined for guests - handled below.
  *
  * Palette: ink #18140D · gold-deep #D9AE68 · border #E7DEC9 · bg #ECE3D0
  */
 export default function PublicProductCard({ product }: PublicProductCardProps) {
+  const [status, setStatus] = useState<AuthStatus>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAuthMe().then(user => {
+      if (cancelled) return;
+      setStatus(user?.role && PRIVILEGED_ROLES.includes(user.role) ? 'privileged' : 'guest');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const primaryMedia = product.media[0] || {
     url: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=900&auto=format&fit=crop&q=80',
     alt: product.name,
@@ -78,15 +130,50 @@ export default function PublicProductCard({ product }: PublicProductCardProps) {
             {product.fabric} · {product.style}
           </p>
 
-          <Link
-            href="/register"
-            className="group/cta mt-3 flex h-10 items-center justify-between rounded-full bg-white pl-4 pr-1 text-[13px] font-semibold text-[#18140D] transition-colors hover:bg-[#F5F0E6]"
-          >
-            <span className="whitespace-nowrap">Unlock rates</span>
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#18140D] text-white">
-              <ArrowUpRight className="h-4 w-4 transition-transform duration-200 group-hover/cta:-translate-y-0.5 group-hover/cta:translate-x-0.5" />
-            </span>
-          </Link>
+          {status === 'checking' && (
+            <>
+              <div className="mt-2.5 h-4 w-2/3 animate-pulse rounded bg-white/15" />
+              <div className="mt-3 h-10 w-full animate-pulse rounded-full bg-white/15" />
+            </>
+          )}
+
+          {status === 'privileged' && (
+            <>
+              {/* Wholesale details, shown only once we know the retailer is logged in */}
+              <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-white/80">
+                <span className="truncate">
+                  {product.piecesPerSet ?? '-'} pcs/set · {product.availableSets ?? 0} sets left
+                </span>
+                <span className="shrink-0 font-mono font-semibold text-[#D9AE68]">
+                  ₹{Number(product.wholesalePricePerPiece ?? 0).toLocaleString('en-IN')}/pc
+                </span>
+              </div>
+
+              <Link
+                href={`/retailer/catalogue/${product.slug ?? ''}`}
+                className="group/cta mt-3 flex h-10 items-center justify-between rounded-full bg-white pl-4 pr-1 text-[13px] font-semibold text-[#18140D] transition-colors hover:bg-[#F5F0E6]"
+              >
+                <span className="whitespace-nowrap">
+                  ₹{Number(product.wholesalePricePerSet ?? 0).toLocaleString('en-IN')}/set
+                </span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#18140D] text-white">
+                  <ArrowUpRight className="h-4 w-4 transition-transform duration-200 group-hover/cta:-translate-y-0.5 group-hover/cta:translate-x-0.5" />
+                </span>
+              </Link>
+            </>
+          )}
+
+          {status === 'guest' && (
+            <Link
+              href="/register"
+              className="group/cta mt-3 flex h-10 items-center justify-between rounded-full bg-white pl-4 pr-1 text-[13px] font-semibold text-[#18140D] transition-colors hover:bg-[#F5F0E6]"
+            >
+              <span className="whitespace-nowrap">Unlock rates</span>
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#18140D] text-white">
+                <ArrowUpRight className="h-4 w-4 transition-transform duration-200 group-hover/cta:-translate-y-0.5 group-hover/cta:translate-x-0.5" />
+              </span>
+            </Link>
+          )}
         </div>
       </div>
     </article>
