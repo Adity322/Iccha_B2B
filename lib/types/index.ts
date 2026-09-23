@@ -136,6 +136,7 @@ export interface Category {
   featured: boolean;
   type: '2_piece' | '3_piece' | 'mixed' | 'kurti_only';
   popularFabrics: string[];
+  products?: any
 }
 
 export interface ProductMedia {

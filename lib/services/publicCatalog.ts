@@ -133,5 +133,5 @@ export const PublicCatalogService = {
       include: productInclude,
     });
     return products.map(toProduct);
-  },
+  }
 };

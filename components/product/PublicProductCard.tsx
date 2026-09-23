@@ -44,21 +44,7 @@ const PRIVILEGED_ROLES = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_MANAGER', 'RETAILE
 
 type AuthStatus = 'checking' | 'privileged' | 'guest';
 
-/**
- * Photo-first card with a floating frosted info panel.
- *
- * - The garment stays the hero: the panel is inset and compact, not a full-height gradient.
- * - Dark glass (not white glass) so text stays readable on bright photos.
- * - Nothing in the footer can wrap: the price is masked in the meta row and the
- *   CTA is one full-width pill, so the layout survives narrow 4-up columns.
- * - Logged-in retailers see wholesale price/set details instead of the
- *   "Unlock rates" upsell. `Product` already carries those fields (sku,
- *   wholesalePricePerPiece, wholesalePricePerSet, piecesPerSet,
- *   availableSets); the public product-fetch just doesn't populate them,
- *   so they come through as undefined for guests - handled below.
- *
- * Palette: ink #18140D · gold-deep #D9AE68 · border #E7DEC9 · bg #ECE3D0
- */
+
 export default function PublicProductCard({ product }: PublicProductCardProps) {
   const [status, setStatus] = useState<AuthStatus>('checking');
 
@@ -92,7 +78,7 @@ export default function PublicProductCard({ product }: PublicProductCardProps) {
     <article className="group h-full rounded-[28px] border border-[#E7DEC9] bg-white p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(0,0,0,0.12)]">
       <div className="relative aspect-[5/8] w-full overflow-hidden rounded-[20px] bg-[#ECE3D0]">
         <Image
-          src={primaryMedia.url}
+          src={primaryMedia.url || "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=900&auto=format&fit=crop&q=80"}
           alt={primaryMedia.alt || product.name}
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"

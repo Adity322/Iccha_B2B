@@ -31,8 +31,6 @@ export default function CategoryRail({ categories }: CategoryRailProps) {
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:flex lg:h-[560px] lg:gap-3">
       {categories.map((category, i) => {
         const isActive = i === active;
-        const chips = category.subcategories.slice(0, 4);
-        const extra = category.subcategories.length - chips.length;
 
         return (
           <li
@@ -92,29 +90,6 @@ export default function CategoryRail({ categories }: CategoryRailProps) {
                       {category.name}
                     </h3>
 
-                    {/* Mobile: quiet one-line hint */}
-                    {chips.length > 0 && (
-                      <p className="mt-1 truncate text-[12px] text-white/70 lg:hidden">
-                        {chips.slice(0, 2).join(', ')}
-                      </p>
-                    )}
-
-                    {/* Desktop: full subcategory chips */}
-                    {chips.length > 0 && (
-                      <ul className="mt-4 hidden flex-wrap gap-1.5 lg:flex">
-                        {chips.map((sub) => (
-                          <li
-                            key={sub}
-                            className="rounded-full border border-white/20 bg-white/15 px-3 py-1 text-[12px] text-white backdrop-blur-md"
-                          >
-                            {sub}
-                          </li>
-                        ))}
-                        {extra > 0 && (
-                          <li className="rounded-full px-2 py-1 text-[12px] text-white/70">+{extra} more</li>
-                        )}
-                      </ul>
-                    )}
                   </div>
 
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-[#18140D] transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 lg:h-12 lg:w-12">
