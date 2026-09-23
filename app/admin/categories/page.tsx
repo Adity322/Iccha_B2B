@@ -38,6 +38,8 @@ export default function AdminCategoriesPage() {
     description: '',
     requiresSize: false
   });
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadCategories = async () => {
     setLoading(true);
@@ -152,22 +154,31 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  const handleDelete = async (c: Category) => {
-    if (!confirm(`Delete "${c.name}"?`)) return;
+const openDeleteConfirm = (c: Category) => setDeleteTarget(c);
 
-    try {
-      const res = await fetch(`/api/admin/categories/${c.id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (json.success) {
-        addToast({ type: 'info', title: 'Category Deleted', message: 'Category removed.' });
-        loadCategories();
-      } else {
-        addToast({ type: 'error', title: 'Cannot delete', message: json.error });
-      }
-    } catch {
-      addToast({ type: 'error', title: 'Network error', message: 'Could not delete category.' });
+const confirmDeleteCategory = async () => {
+  if (!deleteTarget) return;
+  setDeleting(true);
+  try {
+    const res = await fetch(`/api/admin/categories/${deleteTarget.id}?force=true`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) {
+      addToast({
+        type: 'info',
+        title: 'Category Deleted',
+        message: `"${deleteTarget.name}" and its products were removed.`,
+      });
+      setDeleteTarget(null);
+      loadCategories();
+    } else {
+      addToast({ type: 'error', title: 'Cannot delete', message: json.error });
     }
-  };
+  } catch {
+    addToast({ type: 'error', title: 'Network error', message: 'Could not delete category.' });
+  } finally {
+    setDeleting(false);
+  }
+};
 
   const filtered = categories.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -272,7 +283,7 @@ export default function AdminCategoriesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(cat)}
+                      onClick={() => openDeleteConfirm(cat)}
                       className="p-1.5 hover:bg-rose-50 text-rose-700 rounded-lg"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -284,6 +295,59 @@ export default function AdminCategoriesPage() {
           </div>
         )}
       </main>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full border border-stone-200 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-700" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-stone-900">Delete Category?</h2>
+            </div>
+
+            <p className="text-stone-600">
+              You&apos;re about to permanently delete{' '}
+              <span className="font-bold text-stone-900">&ldquo;{deleteTarget.name}&rdquo;</span>.
+            </p>
+
+            {(deleteTarget._count?.products ?? 0) > 0 ? (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800">
+                <p className="font-bold">
+                  ⚠ This will also permanently delete {deleteTarget._count?.products}{' '}
+                  product{deleteTarget._count?.products === 1 ? '' : 's'} in this category
+                </p>
+                <p className="mt-1 text-rose-700">
+                  Including their images, stock and cart entries. This cannot be undone.
+                </p>
+              </div>
+            ) : (
+              <p className="text-stone-500">This category has no products. This action cannot be undone.</p>
+            )}
+
+            <div className="flex gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={confirmDeleteCategory}
+                className="flex-1 py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl font-bold disabled:opacity-60"
+              >
+                {deleting
+                  ? 'Deleting...'
+                  : `Yes, Delete${(deleteTarget._count?.products ?? 0) > 0 ? ' Everything' : ''}`}
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">

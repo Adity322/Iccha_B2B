@@ -427,7 +427,7 @@ model Product {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  category    Category          @relation(fields: [categoryId], references: [id])
+  category    Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   subcategory Subcategory?      @relation(fields: [subcategoryId], references: [id])
   collection  Collection?       @relation(fields: [collectionId], references: [id])
   gstConfig   GSTConfiguration? @relation(fields: [gstConfigId], references: [id])
@@ -775,7 +775,7 @@ model SellerOrderStatusHistory {
 model OrderItem {
   id              String @id @default(uuid())
   orderEnquiryId  String
-  productId       String
+  productId       String?
   billingEntityId String
 
   productName     String
@@ -797,7 +797,7 @@ model OrderItem {
   sizeCombination String
 
   orderEnquiry  OrderEnquiry @relation(fields: [orderEnquiryId], references: [id], onDelete: Cascade)
-  product       Product      @relation(fields: [productId], references: [id])
+  product       Product?      @relation(fields: [productId], references: [id], onDelete: Cascade)
   sellerOrderId String?
   sellerOrder   SellerOrder? @relation(fields: [sellerOrderId], references: [id], onDelete: SetNull)
 
