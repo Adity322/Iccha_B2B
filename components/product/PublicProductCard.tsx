@@ -82,8 +82,8 @@ export default function PublicProductCard({ product }: PublicProductCardProps) {
     product.clothingType === '3_piece'
       ? '3-Pc Set'
       : product.clothingType === '2_piece'
-      ? '2-Pc Set'
-      : 'Kurti';
+        ? '2-Pc Set'
+        : 'Kurti';
 
   const glassPill =
     'whitespace-nowrap rounded-full border border-white/15 bg-[#18140D]/45 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur-md';
@@ -148,6 +148,7 @@ export default function PublicProductCard({ product }: PublicProductCardProps) {
                   ₹{Number(product.wholesalePricePerPiece ?? 0).toLocaleString('en-IN')}/pc
                 </span>
               </div>
+
 
               <Link
                 href={`/retailer/catalogue/${product.slug ?? ''}`}
