@@ -2,7 +2,7 @@
 // Supports PostgreSQL with full relational integrity, dual-GST billing entities, MOQ engine, and Dynamic WebGL Hero CMS.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["relationJoins"]
 }
 
@@ -57,10 +57,10 @@ model VendorProfile {
   updatedAt      DateTime @updatedAt
   vendorCode     String   @unique
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  products     Product[]
-  warehouses   Warehouse[]
-  sellerOrders SellerOrder[]
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products       Product[]
+  warehouses     Warehouse[]
+  sellerOrders   SellerOrder[]
   uploadSessions ProductUploadSession[]
 
   @@index([businessName])
@@ -78,8 +78,8 @@ model Warehouse {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vendor   VendorProfile? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  products Product[]
+  vendor         VendorProfile?         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  products       Product[]
   uploadSessions ProductUploadSession[]
 
   @@index([vendorId])
@@ -97,16 +97,18 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sessions        Session[]
-  retailerProfile RetailerProfile?
-  auditLogs       AuditLog[]
-  createdSlides   HeroSlide[]      @relation("SlideCreator")
-  updatedSlides   HeroSlide[]      @relation("SlideUpdater")
-  vendorProfile   VendorProfile?
+  sessions         Session[]
+  retailerProfile  RetailerProfile?
+  auditLogs        AuditLog[]
+  createdSlides    HeroSlide[]       @relation("SlideCreator")
+  updatedSlides    HeroSlide[]       @relation("SlideUpdater")
+  vendorProfile    VendorProfile?
   staffBankDetails StaffBankDetails?
+
   @@index([email])
   @@index([role])
 }
+
 model StaffBankDetails {
   id            String   @id @default(uuid())
   userId        String   @unique
@@ -121,6 +123,7 @@ model StaffBankDetails {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 model Session {
   id        String   @id @default(uuid())
   userId    String
@@ -398,14 +401,14 @@ model Product {
   availableSets          Int     @default(0)
   totalAvailablePieces   Int     @default(0)
 
-  sizeCombination String 
+  sizeCombination String
   color           String
   fabric          String
   workType        String
   style           String
   clothingType    String
-  hsnCode         String @default("621142")
-  minOrderSets    Int    @default(1) 
+  hsnCode         String  @default("621142")
+  minOrderSets    Int     @default(1)
   // Garment Measurements & Details
   kurtiLength     String?
   bottomLength    String?
@@ -436,12 +439,12 @@ model Product {
   stockAdjustments  StockAdjustment[]
   stockReservations StockReservation[]
   moqRules          MOQRule[]
-  sellerRequests SellerContactRequest[]
+  sellerRequests    SellerContactRequest[]
   heroSlides        HeroSlide[]
   vendorId          String?
-  vendor            VendorProfile?     @relation(fields: [vendorId], references: [id])
+  vendor            VendorProfile?         @relation(fields: [vendorId], references: [id])
   warehouseId       String?
-  warehouse         Warehouse?         @relation(fields: [warehouseId], references: [id])
+  warehouse         Warehouse?             @relation(fields: [warehouseId], references: [id])
 
   @@index([sku])
   @@index([designNumber])
@@ -481,22 +484,39 @@ model ProductMedia {
 }
 
 model ProductUploadSession {
-  id           String   @id @default(uuid())
-  token        String   @unique
-  vendorId     String
-  status       String   @default("pending") // "pending" | "uploaded" | "expired"
-  mediaAssetId String?
-  warehouseId  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  expiresAt    DateTime
+  id          String   @id @default(uuid())
+  token       String   @unique
+  vendorId    String
+  status      String   @default("pending") // "pending" | "uploaded" | "expired"
+  // mediaAssetId String?
+  warehouseId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime
 
-  vendor     VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  mediaAsset MediaAsset?   @relation(fields: [mediaAssetId], references: [id])
-  warehouse  Warehouse?    @relation(fields: [warehouseId], references: [id])
+  vendor       VendorProfile               @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  // mediaAsset MediaAsset?   @relation(fields: [mediaAssetId], references: [id])
+  warehouse    Warehouse?                  @relation(fields: [warehouseId], references: [id])
+  mediaAssets  ProductUploadSessionAsset[]
+  mediaAsset   MediaAsset?                 @relation(fields: [mediaAssetId], references: [id])
+  mediaAssetId String?
 
   @@index([vendorId])
   @@index([token])
+}
+
+model ProductUploadSessionAsset {
+  id           String   @id @default(uuid())
+  sessionId    String
+  mediaAssetId String
+  createdAt    DateTime @default(now())
+
+  session    ProductUploadSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset           @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, mediaAssetId])
+  @@index([sessionId])
+  @@index([mediaAssetId])
 }
 
 // =========================================================================
@@ -510,7 +530,7 @@ model StockAdjustment {
   adjustmentSets Int
   newSets        Int
   reason         String // "INITIAL_STOCK" | "PRODUCTION_RECEIPT" | "ORDER_FULFILLMENT" | "DAMAGED" | "MANUAL_CORRECTION"
-  size           String?   // NEW
+  size           String? // NEW
   note           String?
   actorUserId    String?
   createdAt      DateTime @default(now())
@@ -582,48 +602,50 @@ model MOQOverride {
 }
 
 model SellerContactRequest {
-  id                String   @id @default(uuid())
+  id                String  @id @default(uuid())
   retailerProfileId String
   productId         String?
 
-  customerName      String
-  businessName      String
-  mobile            String
-  whatsapp          String?
+  customerName String
+  businessName String
+  mobile       String
+  whatsapp     String?
 
-  totalDesigns      Int      @default(1)
-  totalSets         Int      @default(0)
-  totalPieces       Int      @default(0)
-  cartSubtotal      Decimal  @default(0) @db.Decimal(10, 2)
+  totalDesigns Int     @default(1)
+  totalSets    Int     @default(0)
+  totalPieces  Int     @default(0)
+  cartSubtotal Decimal @default(0) @db.Decimal(10, 2)
 
-  preferredDate     String?
-  preferredTime     String?
-  remarks           String?
+  preferredDate String?
+  preferredTime String?
+  remarks       String?
 
   // pending | approved | rejected
   // Old legacy values are still tolerated for existing records.
-  status            String   @default("pending")
+  status String @default("pending")
 
   // Vendor user ID when the product belongs to a vendor.
   // For admin-owned products this stays null until staff reviews it.
-  assignedToUserId  String?
+  assignedToUserId String?
 
-  rejectionReason   String?
-  reviewedByUserId  String?
-  reviewedAt        DateTime?
+  rejectionReason  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   retailerProfile RetailerProfile @relation(fields: [retailerProfileId], references: [id], onDelete: Cascade)
 
-product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
   @@index([retailerProfileId])
   @@index([productId])
   @@index([status])
   @@index([assignedToUserId])
   @@index([productId, retailerProfileId, status])
 }
+
 // =========================================================================
 // 7. CARTS & CHECKOUT ORDERS
 // =========================================================================
@@ -973,14 +995,15 @@ model MediaAsset {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  heroDesktopSlides HeroSlide[]    @relation("DesktopHeroImage")
-  heroMobileSlides  HeroSlide[]    @relation("MobileHeroImage")
-  productMedia      ProductMedia[]
-  categoryBanners   Category[]
-  collectionBanners Collection[]
-  kycDocuments      KYCDocument[]
-  estimatePdfs      Estimate[]
-  uploadSessions    ProductUploadSession[]
+  heroDesktopSlides   HeroSlide[]                 @relation("DesktopHeroImage")
+  heroMobileSlides    HeroSlide[]                 @relation("MobileHeroImage")
+  productMedia        ProductMedia[]
+  categoryBanners     Category[]
+  collectionBanners   Collection[]
+  kycDocuments        KYCDocument[]
+  estimatePdfs        Estimate[]
+  uploadSessions      ProductUploadSession[]
+  uploadSessionAssets ProductUploadSessionAsset[]
 
   @@index([storageKey])
   @@index([visibility])

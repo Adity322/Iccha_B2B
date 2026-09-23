@@ -291,16 +291,6 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
         </nav>
 
         <div className="p-3 border-t border-stone-800 bg-stone-900/60 space-y-2 shrink-0">
-          {role && !isVendor && (
-            <div className="px-2 py-1.5 bg-stone-950 rounded-lg border border-stone-800 text-[11px] text-stone-400">
-              <div className="font-semibold text-stone-200">Surat & Jaipur Hubs</div>
-              <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                2 Billing Entities Synchronized
-              </div>
-            </div>
-          )}
-
           <Link
             href="/"
             className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium bg-stone-800 hover:bg-stone-700 text-stone-200 transition"
