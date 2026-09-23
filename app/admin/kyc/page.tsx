@@ -115,7 +115,7 @@ function AdminKYCContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextCursor, loadingMore]);
 
-  const handleUpdateStatus = async (action: 'approve' | 'reject' | 'request_info') => {
+  const handleUpdateStatus = async (action: 'approve' | 'reject' | 'request_info' | 'suspend') => {
     if (!selectedApp) return;
     setSubmitting(true);
     try {
@@ -397,35 +397,71 @@ function AdminKYCContent() {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-2 border-t border-stone-200">
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleUpdateStatus('approve')}
-                className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Approve & Unlock Wholesale Pricing</span>
-              </button>
+              {selectedApp.status === 'APPROVED' ? (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleUpdateStatus('suspend')}
+                  className="flex-1 py-3 bg-rose-800 hover:bg-rose-900 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>Suspend Retailer Access</span>
+                </button>
+              ) : selectedApp.status === 'REJECTED' ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleUpdateStatus('approve')}
+                    className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Approve & Unlock Wholesale Pricing</span>
+                  </button>
 
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleUpdateStatus('request_info')}
-                className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                <AlertTriangle className="w-4 h-4" />
-                <span>Request Document Clarification</span>
-              </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleUpdateStatus('request_info')}
+                    className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Request Document Clarification</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleUpdateStatus('approve')}
+                    className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Approve & Unlock Wholesale Pricing</span>
+                  </button>
 
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleUpdateStatus('reject')}
-                className="px-4 py-3 bg-rose-800 hover:bg-rose-900 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                <XCircle className="w-4 h-4" />
-                <span>Reject</span>
-              </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleUpdateStatus('request_info')}
+                    className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Request Document Clarification</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleUpdateStatus('reject')}
+                    className="px-4 py-3 bg-rose-800 hover:bg-rose-900 text-white rounded-xl font-bold shadow flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>Reject</span>
+                  </button>
+                </>
+              )}
             </div>
 
           </div>
