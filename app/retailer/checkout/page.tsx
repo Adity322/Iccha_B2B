@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import {
+  fetchRetailerProfile,
+  type RetailerProfileData,
+} from '@/lib/retailer-profile-client';
 import { useRouter } from 'next/navigation';
 import {
   Building2,
@@ -24,10 +28,13 @@ export default function RetailerCheckoutPage() {
   const router = useRouter();
   const {
     cart,
-    currentRetailer,
     clearCart,
     addToast
   } = useApp();
+
+  const [retailerProfile, setRetailerProfile] =
+    useState<RetailerProfileData | null>(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
 
   const [transportAgency, setTransportAgency] = useState('V-Trans Express Logistics');
   const [preferredStation, setPreferredStation] = useState('City Transporter Godown / Local Delivery');
@@ -35,25 +42,73 @@ export default function RetailerCheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Address State
-  const [shippingAddress, setShippingAddress] = useState(
-    currentRetailer?.address || {
-      street: 'Shop 14-15, Royal Heritage Arcade, MI Road',
-      city: 'Jaipur',
-      state: 'Rajasthan',
-      stateCode: '08',
-      pincode: '302001'
-    }
-  );
+  const [shippingAddress, setShippingAddress] = useState({
+    street: '',
+    area: null as string | null,
+    city: '',
+    state: '',
+    stateCode: '',
+    pincode: '',
+    landmark: null as string | null,
+  });
 
-  const [billingAddress, setBillingAddress] = useState(
-    currentRetailer?.address || {
-      street: 'Shop 14-15, Royal Heritage Arcade, MI Road',
-      city: 'Jaipur',
-      state: 'Rajasthan',
-      stateCode: '08',
-      pincode: '302001'
-    }
-  );
+  const [billingAddress, setBillingAddress] = useState({
+    street: '',
+    area: null as string | null,
+    city: '',
+    state: '',
+    stateCode: '',
+    pincode: '',
+    landmark: null as string | null,
+  });
+
+  // Load retailer profile + addresses
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRetailerProfile = async () => {
+      try {
+        setIsProfileLoading(true);
+
+        const data = await fetchRetailerProfile();
+
+        if (cancelled) return;
+
+        setRetailerProfile(data);
+
+        if (data.shippingAddress) {
+          setShippingAddress(data.shippingAddress);
+        }
+
+        if (data.billingAddress) {
+          setBillingAddress(data.billingAddress);
+        } else if (data.shippingAddress) {
+          setBillingAddress(data.shippingAddress);
+        }
+      } catch (error) {
+        console.error('Failed to load retailer profile:', error);
+
+        if (!cancelled) {
+          addToast({
+            type: 'error',
+            title: 'Profile Loading Failed',
+            message:
+              'Could not load your retailer profile. Please refresh the page.',
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsProfileLoading(false);
+        }
+      }
+    };
+
+    loadRetailerProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addToast]);
 
   const handleSubmitOrderEnquiry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +179,15 @@ export default function RetailerCheckoutPage() {
     );
   }
 
+  // Profile-loading guard
+  if (isProfileLoading || !retailerProfile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading your retailer profile...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <RetailerHeader />
@@ -171,19 +235,29 @@ export default function RetailerCheckoutPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-stone-700">
                   <div>
                     <span className="text-stone-400 text-[10px] uppercase font-bold block">Boutique Name</span>
-                    <strong className="text-stone-900">{currentRetailer?.businessName}</strong>
+                    <strong className="text-stone-900">
+                      {retailerProfile?.profile.businessName || 'Loading...'}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-stone-400 text-[10px] uppercase font-bold block">Authorized Contact</span>
-                    <strong className="text-stone-900">{currentRetailer?.applicantName} ({currentRetailer?.mobile})</strong>
+                    <strong className="text-stone-900">
+                      {retailerProfile
+                        ? `${retailerProfile.profile.applicantName} (${retailerProfile.profile.mobile})`
+                        : 'Loading...'}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-stone-400 text-[10px] uppercase font-bold block">B2B GSTIN</span>
-                    <strong className="font-mono text-stone-900">{currentRetailer?.gstin}</strong>
+                    <strong className="font-mono text-stone-900">
+                      {retailerProfile?.profile.gstin || 'Not available'}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-stone-400 text-[10px] uppercase font-bold block">Income Tax PAN</span>
-                    <strong className="font-mono text-stone-900">{currentRetailer?.pan}</strong>
+                    <strong className="font-mono text-stone-900">
+                      {retailerProfile?.profile.pan || 'Not available'}
+                    </strong>
                   </div>
                 </div>
               </div>
