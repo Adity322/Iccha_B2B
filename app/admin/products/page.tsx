@@ -402,8 +402,8 @@ export default function AdminProductsPage() {
         const json = await res.json();
         if (!json.success) return;
 
-        if (json.data.status === 'uploaded' && json.data.mediaAsset) {
-          setQrMediaAssets(prev => [...prev, { id: json.data.mediaAsset.id, url: json.data.mediaAsset.publicUrl }]);
+        if (json.data.status === 'uploaded' && json.data.mediaAssets?.length) {
+          setQrMediaAssets(prev => [...prev, ...json.data.mediaAssets.map((a: { id: string; publicUrl: string }) => ({ id: a.id, url: a.publicUrl })), ]);
           setFormData(prev => ({
             ...prev,
             sku: prev.sku || `IC-${(json.data.vendor?.vendorCode || 'GEN')}-${Math.floor(1000 + Math.random() * 9000)}`,

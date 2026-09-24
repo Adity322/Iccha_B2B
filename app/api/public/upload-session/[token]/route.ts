@@ -27,16 +27,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (session.status === "uploaded") {
     return NextResponse.json({
       success: true,
-      data: { status: "uploaded", vendorName: session.vendor.businessName, photoCount: session.mediaAssets.length },
+      data: { status: "uploaded", vendorName: session.vendor?.businessName ?? "Iccha Store", photoCount: session.mediaAssets.length },
     });
   }
   if (session.expiresAt < new Date()) {
-    return NextResponse.json({ success: true, data: { status: "expired", vendorName: session.vendor.businessName } });
+    return NextResponse.json({ success: true, data: { status: "expired", vendorName: session.vendor?.businessName ?? "Iccha Store" } });
   }
 
   return NextResponse.json({
     success: true,
-    data: { status: "pending", vendorName: session.vendor.businessName, photoCount: session.mediaAssets.length },
+    data: { status: "pending", vendorName: session.vendor?.businessName ?? "Iccha Store", photoCount: session.mediaAssets.length },
   });
 }
 

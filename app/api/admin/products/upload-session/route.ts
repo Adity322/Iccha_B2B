@@ -28,31 +28,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
     }
 
-    let vendorId: string;
+    let vendorId: string | null;
     if (auth.kind === "vendor") {
       vendorId = auth.vendorProfile.id;
     } else {
       const body = await request.json().catch(() => ({}));
-      if (!body.vendorId) {
-        return NextResponse.json(
-          { success: false, error: "vendorId is required for staff-initiated uploads" },
-          { status: 400 }
-        );
+      if (body.vendorId) {
+        const vendor = await prisma.vendorProfile.findUnique({ where: { id: body.vendorId } });
+        if (!vendor) {
+          return NextResponse.json({ success: false, error: "Vendor not found" }, { status: 400 });
+        }
+        vendorId = vendor.id;
+      } else {
+        vendorId = null; // admin / house-owned product
       }
-      const vendor = await prisma.vendorProfile.findUnique({ where: { id: body.vendorId } });
-      if (!vendor) {
-        return NextResponse.json({ success: false, error: "Vendor not found" }, { status: 400 });
-      }
-      vendorId = vendor.id;
     }
 
     // Vendor's own warehouse — auto-attached to the session so the desktop
     // form doesn't have to ask for it again once the phone upload completes.
-    const defaultWarehouse = await prisma.warehouse.findFirst({
-      where: { vendorId, isActive: true },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
+    const defaultWarehouse = vendorId ? await prisma.warehouse.findFirst({
+          where: { vendorId, isActive: true },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        }) : null;
 
     const token = crypto.randomBytes(24).toString("hex");
     const expiresAt = new Date(Date.now() + SESSION_TTL_MINUTES * 60 * 1000);
@@ -60,7 +58,7 @@ export async function POST(request: NextRequest) {
     const session = await prisma.productUploadSession.create({
       data: {
         token,
-        vendorId,
+        vendorId : vendorId,
         warehouseId: defaultWarehouse?.id,
         expiresAt,
       },
@@ -96,7 +94,7 @@ export async function GET(request: NextRequest) {
     const session = await prisma.productUploadSession.findUnique({
       where: { token },
       include: {
-        mediaAsset: { select: { id: true, publicUrl: true } },
+        mediaAssets: { include : { mediaAsset : { select: { id: true, publicUrl: true } } } },
         warehouse: { select: { id: true, name: true } },
         vendor: { select: { id: true, businessName: true, vendorCode: true } },
       },
@@ -114,7 +112,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         status: session.status,
-        mediaAsset: session.mediaAsset,
+        mediaAssets: session.mediaAssets.map((a) => a.mediaAsset),
         warehouse: session.warehouse,
         vendor: session.vendor,
       },
