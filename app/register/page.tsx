@@ -12,7 +12,8 @@ import {
   UserCheck, 
   Phone, 
   MapPin, 
-  Lock 
+  Lock,
+  AlertTriangle
 } from 'lucide-react';
 import PublicHeader from '@/components/layout/PublicHeader';
 import Footer from '@/components/layout/Footer';
@@ -136,6 +137,20 @@ export default function RegisterStep1Page() {
           {/* Form Card */}
           <div className="bg-white rounded-3xl p-6 sm:p-10 border border-stone-200 shadow-sm space-y-6">
             
+            {/* Inactivity Warning Notice */}
+            <div className="p-3.5 bg-red-50 rounded-2xl border border-red-200 flex items-start gap-3 text-xs">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="text-red-900">
+                <span className="font-bold">Account Activity Notice: </span>
+                <span>
+                  Retailer accounts that remain inactive for an extended period of more then 15 days (no logins or orders)
+                  may be automatically deactivated. Please log in and place orders periodically to
+                  keep your account active.
+                  If once your account is deactivated then you will have to contact the admin for reactivation of your account
+                </span>
+              </div>
+            </div>
+
             {/* Quick Demo Pre-fill Button */}
             <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-amber-900 font-medium">

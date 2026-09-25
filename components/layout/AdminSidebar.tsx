@@ -9,6 +9,7 @@ import {
   Sparkles,
   Users,
   FileCheck,
+  ClipboardCheck,
   Package,
   FolderTree,
   Boxes,
@@ -48,6 +49,11 @@ const STAFF_ONLY_LINKS: NavLink[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Hero Banners', href: '/admin/hero', icon: Sparkles },
   { label: 'Retailers', href: '/admin/retailers', icon: Users },
+  {
+    label: 'Reactivation Requests',
+    href: '/admin/retailer-reactivation-requests',
+    icon: ClipboardCheck,
+  },
   { label: 'Vendors', href: '/admin/vendors', icon: Store },
   { label: 'KYC Applications', href: '/admin/kyc', icon: FileCheck },
   { label: 'User', href: '/admin/roles', icon: UserCog },
@@ -62,9 +68,14 @@ const SHARED_LINKS: NavLink[] = [
 ];
 
 const STAFF_ONLY_TRAILING_LINKS: NavLink[] = [
-  { label: 'Categories', href: '/admin/categories', icon: FolderTree },
   { label: 'MOQ Rules', href: '/admin/moq-rules', icon: Sliders },
 ];
+
+const CATEGORY_LINK: NavLink = {
+  label: 'Categories',
+  href: '/admin/categories',
+  icon: FolderTree,
+};
 
 export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
   const pathname = usePathname();
@@ -160,11 +171,15 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps = {}) {
 
   // Unknown role -> show no links (never default to the full staff menu).
   const navLinks: NavLink[] = !role
-    ? []
-    : isVendor
-      ? SHARED_LINKS
-      : [...STAFF_ONLY_LINKS, ...SHARED_LINKS, ...STAFF_ONLY_TRAILING_LINKS];
-
+  ? []
+  : isVendor
+    ? [...SHARED_LINKS, CATEGORY_LINK]
+    : [
+        ...STAFF_ONLY_LINKS,
+        ...SHARED_LINKS,
+        CATEGORY_LINK,
+        ...STAFF_ONLY_TRAILING_LINKS,
+      ];
   const formatCount = (n: number) => (n > 99 ? '99+' : String(n));
 
   // Pills only appear when there is something to act on.

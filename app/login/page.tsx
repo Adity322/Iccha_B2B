@@ -16,7 +16,14 @@ import PublicHeader from '@/components/layout/PublicHeader';
 import Footer from '@/components/layout/Footer';
 import { useApp } from '@/lib/context/AppContext';
 
-type LoginErrorKind = 'invalid' | 'pending' | 'rejected' | 'suspended' | 'generic' | null;
+type LoginErrorKind =
+  | 'invalid'
+  | 'pending'
+  | 'rejected'
+  | 'suspended'
+  | 'deactivated'
+  | 'generic'
+  | null;
 
 const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@icchastore.com';
 
@@ -37,6 +44,10 @@ export default function LoginPage() {
     pending: { title: 'Application awaiting admin approval', tone: 'bg-amber-50 border-amber-200 text-amber-800' },
     rejected: { title: 'Your account has been rejected', tone: 'bg-rose-50 border-rose-200 text-rose-800' },
     suspended: { title: 'Account suspended', tone: 'bg-stone-100 border-stone-300 text-stone-800' },
+    deactivated: {
+      title: 'Account deactivated',
+      tone: 'bg-amber-50 border-amber-200 text-amber-900',
+    },
     generic: { title: 'Something went wrong', tone: 'bg-rose-50 border-rose-200 text-rose-800' },
   };
 
@@ -64,6 +75,9 @@ export default function LoginPage() {
           setErrorMessage(null); // banner renders its own fixed message + support link below
         } else if (result.error === 'SUSPENDED') {
           setErrorKind('suspended');
+          setErrorMessage(result.message || null);
+        } else if (result.error === 'DEACTIVATED') {
+          setErrorKind('deactivated');
           setErrorMessage(result.message || null);
         } else {
           setErrorKind('invalid');
@@ -144,7 +158,23 @@ export default function LoginPage() {
                     </span>
                   )}
 
-                  {errorMessage && errorKind !== 'rejected' && errorKind !== 'suspended' && (
+                  {errorKind === 'deactivated' && (
+                    <div className="mt-2 space-y-2">
+                      <span className="block">
+                        {errorMessage ||
+                          'Your retailer account has been deactivated due to inactivity.'}
+                      </span>
+
+                      <Link
+                        href="/retailer/deactivated"
+                        className="inline-block font-semibold underline"
+                      >
+                        Request Reactivation &rarr;
+                      </Link>
+                    </div>
+                  )}
+
+                  {errorMessage && errorKind !== 'rejected' && errorKind !== 'suspended' && errorKind !== 'deactivated' && (
                     <span className="block mt-0.5">{errorMessage}</span>
                   )}
 

@@ -79,6 +79,12 @@ export async function PATCH(
     data: { sets },
   });
 
+  // Updating cart quantity counts as meaningful activity — reset the inactivity clock.
+  await prisma.retailerProfile.update({
+    where: { id: guard.retailerProfile.id },
+    data: { lastActivityAt: new Date() },
+  });
+
   const updatedCart = await getOrCreateCart(guard.retailerProfile.id);
   const data = await serializeCartFull(updatedCart, guard.retailerProfile.id);
   return NextResponse.json({ success: true, data });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireStaff } from "@/lib/auth/guard";
+import { requireStaff, requireVendor } from "@/lib/auth/guard";
 
 const updateCategorySchema = z.object({
   name: z.string().min(1).optional(),
@@ -17,12 +17,40 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const guard = await requireStaff(request);
-    if ("error" in guard) {
-      return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+    const { id } = await params;
+
+    const staffResult = await requireStaff(request);
+
+    if ("error" in staffResult) {
+      const vendorResult = await requireVendor(request);
+
+      if ("error" in vendorResult) {
+        return NextResponse.json(
+          { success: false, error: "Staff or vendor access required" },
+          { status: 403 }
+        );
+      }
+
+      const existing = await prisma.category.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      });
+
+      if (!existing) {
+        return NextResponse.json(
+          { success: false, error: "Category not found" },
+          { status: 404 }
+        );
+      }
+
+      if (existing.vendorId !== vendorResult.vendorProfile.id) {
+        return NextResponse.json(
+          { success: false, error: "You can only edit your own categories" },
+          { status: 403 }
+        );
+      }
     }
 
-    const { id } = await params;
     const body = await request.json();
     const parsed = updateCategorySchema.safeParse(body);
     if (!parsed.success) {
@@ -52,12 +80,40 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const guard = await requireStaff(request);
-    if ("error" in guard) {
-      return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+    const { id } = await params;
+
+    const staffResult = await requireStaff(request);
+
+    if ("error" in staffResult) {
+      const vendorResult = await requireVendor(request);
+
+      if ("error" in vendorResult) {
+        return NextResponse.json(
+          { success: false, error: "Staff or vendor access required" },
+          { status: 403 }
+        );
+      }
+
+      const existing = await prisma.category.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      });
+
+      if (!existing) {
+        return NextResponse.json(
+          { success: false, error: "Category not found" },
+          { status: 404 }
+        );
+      }
+
+      if (existing.vendorId !== vendorResult.vendorProfile.id) {
+        return NextResponse.json(
+          { success: false, error: "You can only delete your own categories" },
+          { status: 403 }
+        );
+      }
     }
 
-    const { id } = await params;
     const force = new URL(request.url).searchParams.get("force") === "true";
 
     const productCount = await prisma.product.count({ where: { categoryId: id } });

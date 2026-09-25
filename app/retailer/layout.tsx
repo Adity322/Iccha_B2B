@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth/getSession";
 
-export default async function RetailerLayout({ children }: { children: React.ReactNode }) {
+export default async function RetailerLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -12,8 +17,24 @@ export default async function RetailerLayout({ children }: { children: React.Rea
     redirect("/login");
   }
 
-  if (user.retailerProfile?.status !== "APPROVED") {
-    redirect(`/application-status?email=${encodeURIComponent(user.email)}`);
+  const status = user.retailerProfile?.status;
+
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-pathname") || "";
+
+  // IMPORTANT: this must come before the APPROVED check.
+  if (status === "DEACTIVATED") {
+    if (pathname !== "/retailer/deactivated") {
+      redirect("/retailer/deactivated");
+    }
+
+    return <>{children}</>;
+  }
+
+  if (status !== "APPROVED") {
+    redirect(
+      `/application-status?email=${encodeURIComponent(user.email)}`
+    );
   }
 
   return <>{children}</>;

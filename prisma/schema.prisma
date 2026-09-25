@@ -34,12 +34,12 @@ enum RetailerAccountStatus {
 }
 
 model VendorProfile {
-  id             String   @id @default(uuid())
-  userId         String   @unique
+  id             String                 @id @default(uuid())
+  userId         String                 @unique
   businessName   String
   contactName    String
   mobile         String
-  gstin          String   @unique
+  gstin          String                 @unique
   pan            String?
   address        String
   city           String
@@ -51,13 +51,13 @@ model VendorProfile {
   ifsc           String?
   branch         String?
   upiId          String?
-  invoicePrefix  String   @default("INV-VEN-")
-  defaultGstRate Decimal  @default(5.0) @db.Decimal(5, 2)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  vendorCode     String   @unique
-
+  invoicePrefix  String                 @default("INV-VEN-")
+  defaultGstRate Decimal                @default(5.0) @db.Decimal(5, 2)
+  isActive       Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  vendorCode     String                 @unique
+  categories     Category[]
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   products       Product[]
   warehouses     Warehouse[]
@@ -163,9 +163,10 @@ model RetailerProfile {
   moqSetsOverride    Int?
   moqDesignsOverride Int?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  lastActivityAt  DateTime?
+  deactivatedAt   DateTime?
   user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   classification  RetailerClassification? @relation(fields: [classificationId], references: [id])
   addresses       RetailerAddress[]
@@ -344,7 +345,11 @@ model Category {
   products      Product[]
   moqRules      MOQRule[]
   heroSlides    HeroSlide[]
+  vendorId      String?
 
+  vendor VendorProfile? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
   @@index([slug])
   @@index([billingEntityId])
 }
@@ -666,7 +671,7 @@ model CartItem {
   cartId       String
   productId    String
   sets         Int      @default(1)
-  selectedSize String   @default("__NO_SIZE__")
+  selectedSize String   @default("NO_SIZE")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -774,7 +779,7 @@ model SellerOrderStatusHistory {
 }
 
 model OrderItem {
-  id              String @id @default(uuid())
+  id              String  @id @default(uuid())
   orderEnquiryId  String
   productId       String?
   billingEntityId String
@@ -798,7 +803,7 @@ model OrderItem {
   sizeCombination String
 
   orderEnquiry  OrderEnquiry @relation(fields: [orderEnquiryId], references: [id], onDelete: Cascade)
-  product       Product?      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
   sellerOrderId String?
   sellerOrder   SellerOrder? @relation(fields: [sellerOrderId], references: [id], onDelete: SetNull)
 

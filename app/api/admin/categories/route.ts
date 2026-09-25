@@ -1,41 +1,119 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireStaff, requireVendor, requireRetailer } from "@/lib/auth/guard";
+import {
+  requireStaff,
+  requireVendor,
+  requireRetailer,
+} from "@/lib/auth/guard";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
   try {
+    const searchParams = new URL(request.url).searchParams;
+    const vendorId = searchParams.get("vendorId");
+    const owner = searchParams.get("owner");
+
     const staffResult = await requireStaff(request);
-    if ("error" in staffResult) {
-      const vendorResult = await requireVendor(request);
-      if ("error" in vendorResult) {
-        const retailerResult = await requireRetailer(request);
-        if ("error" in retailerResult) {
-          return NextResponse.json(
-            { success: false, error: "Login required" },
-            { status: 401 }
-          );
-        }
-      }
+
+    if (!("error" in staffResult)) {
+      const categories = await prisma.category.findMany({
+        where: {
+          isActive: true,
+          ...(owner === "admin"
+            ? { vendorId: null }
+            : vendorId
+              ? { vendorId }
+              : {}),
+        },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          requiresSize: true,
+          vendorId: true,
+          mediaAsset: {
+            select: { publicUrl: true },
+          },
+          _count: {
+            select: { products: true },
+          },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: categories,
+      });
     }
 
-    const categories = await prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: "asc" },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        description: true,
-        requiresSize: true,
-        mediaAsset: { select: { publicUrl: true } },
-        _count: { select: { products: true } },
-      },
-    });
+    const vendorResult = await requireVendor(request);
 
-    return NextResponse.json({ success: true, data: categories });
+    if (!("error" in vendorResult)) {
+      const categories = await prisma.category.findMany({
+        where: {
+          isActive: true,
+          vendorId: vendorResult.vendorProfile.id,
+        },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          requiresSize: true,
+          vendorId: true,
+          mediaAsset: {
+            select: { publicUrl: true },
+          },
+          _count: {
+            select: { products: true },
+          },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: categories,
+      });
+    }
+
+    const retailerResult = await requireRetailer(request);
+
+    if (!("error" in retailerResult)) {
+      const categories = await prisma.category.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          requiresSize: true,
+          vendorId: true,
+          mediaAsset: {
+            select: { publicUrl: true },
+          },
+          _count: {
+            select: { products: true },
+          },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: categories,
+      });
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Login required" },
+      { status: 401 }
+    );
   } catch (error) {
     console.error("Categories list error:", error);
+
     return NextResponse.json(
       { success: false, error: "Something went wrong. Please try again." },
       { status: 500 }
@@ -50,29 +128,67 @@ const createCategorySchema = z.object({
   type: z.string().default("kurti_pant_set"),
   mediaAssetId: z.string().optional(),
   requiresSize: z.boolean().default(false),
+  vendorId: z.string().nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requireStaff(request);
-    if ("error" in guard) {
-      return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
-    }
+    const staffResult = await requireStaff(request);
 
-    const body = await request.json();
-    const parsed = createCategorySchema.safeParse(body);
-    if (!parsed.success) {
+    if (!("error" in staffResult)) {
+      const body = await request.json();
+      const parsed = createCategorySchema.safeParse(body);
+
+      if (!parsed.success) {
+        return NextResponse.json(
+          { success: false, error: parsed.error.issues[0].message },
+          { status: 400 }
+        );
+      }
+
+      const category = await prisma.category.create({
+        data: parsed.data,
+      });
+
       return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
+        { success: true, data: category },
+        { status: 201 }
       );
     }
 
-    const category = await prisma.category.create({ data: parsed.data });
+    const vendorResult = await requireVendor(request);
 
-    return NextResponse.json({ success: true, data: category }, { status: 201 });
+    if (!("error" in vendorResult)) {
+      const body = await request.json();
+      const parsed = createCategorySchema.safeParse(body);
+
+      if (!parsed.success) {
+        return NextResponse.json(
+          { success: false, error: parsed.error.issues[0].message },
+          { status: 400 }
+        );
+      }
+
+      const category = await prisma.category.create({
+        data: {
+          ...parsed.data,
+          vendorId: vendorResult.vendorProfile.id,
+        },
+      });
+
+      return NextResponse.json(
+        { success: true, data: category },
+        { status: 201 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Staff or vendor access required" },
+      { status: 403 }
+    );
   } catch (error) {
     console.error("Create category error:", error);
+
     return NextResponse.json(
       { success: false, error: "Something went wrong. Please try again." },
       { status: 500 }

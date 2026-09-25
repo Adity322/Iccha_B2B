@@ -91,6 +91,41 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      if (status === "DEACTIVATED") {
+        const token = await createSessionToken({
+          userId: user.id,
+          role: user.role,
+          email: user.email,
+        });
+
+        const response = NextResponse.json(
+          {
+            success: false,
+            error: "DEACTIVATED",
+            message:
+              "Your retailer account has been deactivated due to inactivity.",
+            data: {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+              retailerStatus: status,
+            },
+          },
+          { status: 403 }
+        );
+
+        response.cookies.set(SESSION_COOKIE_NAME, token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: SESSION_DURATION_SECONDS,
+        });
+
+        return response;
+      }
+
       if (status === "REJECTED" || status === "SUSPENDED") {
         return NextResponse.json(
           {

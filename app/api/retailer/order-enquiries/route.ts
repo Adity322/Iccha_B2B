@@ -479,6 +479,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Placing an order counts as meaningful activity — reset the inactivity clock.
+      await tx.retailerProfile.update({
+        where: { id: retailerProfileId },
+        data: { lastActivityAt: new Date() },
+      });
+
       // Create one seller-level order for each owner in the master order.
       // vendorId !== null  -> vendor-owned products
       // vendorId === null  -> IcchaStore/Admin-owned products
