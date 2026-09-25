@@ -30,6 +30,7 @@ enum RetailerAccountStatus {
   APPROVED
   REJECTED
   SUSPENDED
+  DEACTIVATED
 }
 
 model VendorProfile {

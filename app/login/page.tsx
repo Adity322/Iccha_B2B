@@ -30,6 +30,7 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorKind, setErrorKind] = useState<LoginErrorKind>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [identifier, setIdentifier] = useState('');
 
   const errorBanner: Record<Exclude<LoginErrorKind, null>, { title: string; tone: string }> = {
     invalid: { title: 'Invalid email or password', tone: 'bg-rose-50 border-rose-200 text-rose-800' },
@@ -49,7 +50,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       });
 
       const result = await res.json();
@@ -159,16 +160,16 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
                 <label className="block font-semibold text-stone-700 mb-1">
-                  Registered Email Address *
+                  Registered Email Address Or Phone Number *
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="orders@yourboutique.com"
+                    placeholder="Email or phone number"
+                    value={identifier}
+                    onChange={e => setIdentifier(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900 font-medium"
                   />
                 </div>

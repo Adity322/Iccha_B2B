@@ -4,12 +4,40 @@ import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } from "@/lib/auth/session";
 
+const PENDING_STATUSES = ["APPLICATION_RECEIVED", "UNDER_REVIEW", "ADDITIONAL_INFORMATION_REQUIRED"];
+
+// --- helpers to tell an email apart from a phone number -------------------
+
+function isEmailFormat(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isPhoneFormat(value: string): boolean {
+  // allow spaces, dashes, parens while typing, then check the digits
+  const digitsOnly = value.replace(/[\s\-()]/g, "");
+  return /^\+?\d{7,15}$/.test(digitsOnly);
+}
+
+function normalizePhone(value: string): string {
+  // keep a leading + if present, strip everything else that isn't a digit
+  const trimmed = value.trim();
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+  return hasPlus ? `+${digits}` : digits;
+}
+
+// --- schema -----------------------------------------------------------
+
 const loginSchema = z.object({
-  email: z.string().email("Enter a valid email"),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, "Email or phone number is required")
+    .refine((val) => isEmailFormat(val) || isPhoneFormat(val), {
+      message: "Enter a valid email or phone number",
+    }),
   password: z.string().min(1, "Password is required"),
 });
-
-const PENDING_STATUSES = ["APPLICATION_RECEIVED", "UNDER_REVIEW", "ADDITIONAL_INFORMATION_REQUIRED"];
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,16 +51,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password } = parsed.data;
+    const { identifier, password } = parsed.data;
+    const usingEmail = isEmailFormat(identifier);
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: usingEmail
+        ? { email: identifier.toLowerCase() }
+        : { mobile: normalizePhone(identifier) },
       include: { retailerProfile: true },
     });
 
     if (!user || !user.isActive) {
       return NextResponse.json(
-        { success: false, error: "Invalid email or password" },
+        { success: false, error: "Invalid email/phone or password" },
         { status: 401 }
       );
     }
@@ -40,7 +71,7 @@ export async function POST(request: NextRequest) {
     const passwordValid = await verifyPassword(password, user.passwordHash);
     if (!passwordValid) {
       return NextResponse.json(
-        { success: false, error: "Invalid email or password" },
+        { success: false, error: "Invalid email/phone or password" },
         { status: 401 }
       );
     }
@@ -74,6 +105,7 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
     if (user.role === "VENDOR") {
       const vendorProfile = await prisma.vendorProfile.findUnique({ where: { userId: user.id } });
       if (!vendorProfile || !vendorProfile.isActive) {
@@ -83,6 +115,7 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -99,6 +132,7 @@ export async function POST(request: NextRequest) {
       data: {
         id: user.id,
         email: user.email,
+        mobile: user.mobile,
         name: user.name,
         role: user.role,
         retailerStatus: user.retailerProfile?.status,
