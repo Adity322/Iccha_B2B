@@ -24,6 +24,7 @@ interface Category {
   requiresSize: boolean;
   vendorId?: string | null;
   mediaAsset?: { publicUrl: string } | null;
+  gst?: string | null;
   _count?: { products: number };
 }
 
@@ -49,7 +50,8 @@ export default function AdminCategoriesPage() {
     name: '',
     slug: '',
     description: '',
-    requiresSize: false
+    requiresSize: false,
+    gst: '',
   });
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -201,13 +203,13 @@ export default function AdminCategoriesPage() {
 
   const openAddModal = () => {
     setEditingCategory(null);
-    setFormData({ name: '', slug: '', description: '', requiresSize: false });
+    setFormData({ name: '', slug: '', description: '', requiresSize: false, gst: '' });
     setIsModalOpen(true);
   };
 
   const openEditModal = (c: Category) => {
     setEditingCategory(c);
-    setFormData({ name: c.name, slug: c.slug, description: c.description || '', requiresSize: c.requiresSize });
+    setFormData({ name: c.name, slug: c.slug, description: c.description || '', requiresSize: c.requiresSize, gst: c.gst || '' });
     setIsModalOpen(true);
   };
 
@@ -248,6 +250,7 @@ export default function AdminCategoriesPage() {
       slug,
       description: formData.description,
       requiresSize: formData.requiresSize,
+      gst: formData.gst || undefined,
       ...(mediaAssetId ? { mediaAssetId } : {}),
       ...(isStaff
         ? { vendorId: selectedOwner === "admin" ? null : selectedOwner }
@@ -384,11 +387,10 @@ export default function AdminCategoriesPage() {
                 setEditingCategory(null);
                 setIsModalOpen(false);
               }}
-              className={`w-full text-left rounded-2xl border p-5 transition ${
-                selectedOwner === "admin"
-                  ? "border-rose-600 bg-rose-50"
-                  : "border-stone-200 bg-white hover:border-stone-300"
-              }`}
+              className={`w-full text-left rounded-2xl border p-5 transition ${selectedOwner === "admin"
+                ? "border-rose-600 bg-rose-50"
+                : "border-stone-200 bg-white hover:border-stone-300"
+                }`}
             >
               <div className="flex items-center gap-4">
                 <div className="w-11 h-11 rounded-xl bg-stone-100 flex items-center justify-center">
@@ -422,11 +424,10 @@ export default function AdminCategoriesPage() {
                     setEditingCategory(null);
                     setIsModalOpen(false);
                   }}
-                  className={`text-left rounded-2xl border p-5 transition ${
-                    selectedOwner === vendor.id
-                      ? "border-rose-600 bg-rose-50"
-                      : "border-stone-200 bg-white hover:border-rose-300 hover:shadow-sm"
-                  }`}
+                  className={`text-left rounded-2xl border p-5 transition ${selectedOwner === vendor.id
+                    ? "border-rose-600 bg-rose-50"
+                    : "border-stone-200 bg-white hover:border-rose-300 hover:shadow-sm"
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -452,11 +453,10 @@ export default function AdminCategoriesPage() {
 
                   <div className="mt-4">
                     <span
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        vendor.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-stone-100 text-stone-500"
-                      }`}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-full ${vendor.isActive
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-stone-100 text-stone-500"
+                        }`}
                     >
                       {vendor.isActive ? "Active" : "Inactive"}
                     </span>
@@ -656,6 +656,31 @@ export default function AdminCategoriesPage() {
                   placeholder="Auto-generated if left blank"
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono focus:outline-none focus:border-rose-900"
                 />
+              </div>
+              <div>
+                <label className="block font-bold text-stone-800 mb-1">
+                  GST Rate
+                </label>
+
+                <select
+                  value={formData.gst}
+                  onChange={e =>
+                    setFormData({
+                      ...formData,
+                      gst: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
+                >
+                  <option value="">Select GST rate</option>
+                  <option value="0">0%</option>
+                  <option value="0.25">0.25%</option>
+                  <option value="1.5">1.5%</option>
+                  <option value="3">3%</option>
+                  <option value="5">5%</option>
+                  <option value="18">18%</option>
+                  <option value="40">40%</option>
+                </select>
               </div>
               <div>
                 <label className="block font-bold text-stone-800 mb-1">Cover Image</label>

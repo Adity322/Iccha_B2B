@@ -17,7 +17,7 @@ export async function GET(
     const product = await prisma.product.findUnique({
       where: { slug, isActive: true },
       include: {
-        category: { select: { id: true, name: true, requiresSize: true } },
+        category: { select: { id: true, name: true, requiresSize: true, gst: true, } },
         vendor: { select: { id: true, businessName: true } },
         sizes: {
           where: { availableSets: { gt: 0 } },
@@ -83,7 +83,7 @@ export async function GET(
         .filter(Boolean),
       billingEntityId: product.gstConfig?.billingEntityId ?? null,
       hsn: product.gstConfig?.hsnCode ?? product.hsnCode,
-      gstRate,
+      gstRate:product.category?.gst ?? "",
       media: product.media.map((m) => ({
         id: m.id,
         type: m.mediaType === "VIDEO" ? "video" : "image",

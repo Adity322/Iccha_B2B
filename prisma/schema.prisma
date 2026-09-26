@@ -346,6 +346,7 @@ model Category {
   moqRules      MOQRule[]
   heroSlides    HeroSlide[]
   vendorId      String?
+  gst           String?
 
   vendor VendorProfile? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 

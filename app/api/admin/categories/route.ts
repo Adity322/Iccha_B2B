@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
           description: true,
           requiresSize: true,
           vendorId: true,
+          gst: true,
           mediaAsset: {
             select: { publicUrl: true },
           },
@@ -129,6 +130,7 @@ const createCategorySchema = z.object({
   mediaAssetId: z.string().optional(),
   requiresSize: z.boolean().default(false),
   vendorId: z.string().nullable().optional(),
+  gst: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {

@@ -10,6 +10,7 @@ const updateCategorySchema = z.object({
   isActive: z.boolean().optional(),
   mediaAssetId: z.string().optional(),
   requiresSize: z.boolean().optional(),
+  gst: z.string().optional(),
 });
 
 export async function PATCH(
@@ -59,7 +60,6 @@ export async function PATCH(
         { status: 400 }
       );
     }
-
     const category = await prisma.category.update({
       where: { id },
       data: parsed.data,
