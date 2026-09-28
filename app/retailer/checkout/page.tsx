@@ -188,6 +188,14 @@ export default function RetailerCheckoutPage() {
     );
   }
 
+  const gstBreakdown = cart.items.map((item) => ({
+    name: item.product.name,
+    rate: Number(item.product.gstRate ?? 0),
+    amount: Math.round(
+      (item.lineSubtotal * Number(item.product.gstRate ?? 0)) / 100
+    ),
+  }));
+
   return (
     <div className="flex flex-col min-h-screen">
       <RetailerHeader />
@@ -429,10 +437,20 @@ export default function RetailerCheckoutPage() {
                     <span>Master Taxable Subtotal:</span>
                     <span className="font-mono font-semibold">₹{cart.subtotal.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between text-stone-600">
-                    <span>Total GST (5%):</span>
-                    <span className="font-mono font-semibold">₹{cart.estimatedGst.toLocaleString('en-IN')}</span>
-                  </div>
+                  {gstBreakdown.map((gst) => (
+                      <div
+                        key={`${gst.name}-${gst.rate}`}
+                        className="flex justify-between text-[11px]"
+                      >
+                        <span>
+                          {gst.name} (GST {gst.rate}%)
+                        </span>
+
+                        <span className="font-mono">
+                          ₹{gst.amount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    ))}
                   <div className="flex justify-between text-stone-600">
                     <span>Estimated Freight:</span>
                     <span className="font-mono font-semibold">₹{cart.shippingEstimate.toLocaleString('en-IN')}</span>
@@ -446,11 +464,11 @@ export default function RetailerCheckoutPage() {
                 </div>
 
                 {/* Cash on Delivery */}
-                <div className="p-4 bg-stone-900 text-stone-200 rounded-2xl space-y-2 text-[11px] leading-relaxed">
+                {/* <div className="p-4 bg-stone-900 text-stone-200 rounded-2xl space-y-2 text-[11px] leading-relaxed">
                   <div className="text-emerald-300 font-bold flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4" /> Cash on Delivery (COD)
                   </div>
-                </div>
+                </div> */}
 
                 {/* Submit Master Order Button */}
                 <button

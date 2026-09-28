@@ -42,7 +42,7 @@ interface RetailerProductCardProps {
  * bottom edge with a gradient blend so the two read as a single card.
  */
 export default function RetailerProductCard({ product, cartItem, onCartChanged }: RetailerProductCardProps) {
-  const [setsToAdd, setSetsToAdd] = useState(1);
+  const [setsToAdd, setSetsToAdd] = useState(product?.minOrderSets);
   const [justAdded, setJustAdded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);

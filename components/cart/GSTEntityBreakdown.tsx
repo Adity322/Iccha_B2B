@@ -215,7 +215,7 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
             </div>
 
             {/* Entity Summary Footer */}
-            <div className="bg-stone-50/80 p-4 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            {/* <div className="bg-stone-50/80 p-4 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="text-stone-500">
                 <span>Tax Breakdown: </span>
                 {group.cgst > 0 ? (
@@ -232,7 +232,7 @@ export default function GSTEntityBreakdown({ summaries, isEditable = true }: GST
                   ₹{group.total.toLocaleString('en-IN')}
                 </span>
               </div>
-            </div>
+            </div> */}
 
           </div>
         );

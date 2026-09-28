@@ -3,16 +3,16 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  Building2, 
-  ShoppingBag, 
-  Receipt, 
-  ArrowRight, 
-  ShieldCheck, 
-  Clock, 
-  AlertTriangle, 
-  Video, 
-  Sparkles, 
+import {
+  Building2,
+  ShoppingBag,
+  Receipt,
+  ArrowRight,
+  ShieldCheck,
+  Clock,
+  AlertTriangle,
+  Video,
+  Sparkles,
   CheckCircle2,
   Trash2
 } from 'lucide-react';
@@ -24,14 +24,14 @@ import { useApp } from '@/lib/context/AppContext';
 
 export default function RetailerCartPage() {
   const router = useRouter();
-  const { 
-    cart, 
+  const {
+    cart,
     isCartLoading,
-    moqEvaluation, 
-    clearCart, 
-    openSellerModal, 
-    currentRetailer, 
-    addToast 
+    moqEvaluation,
+    clearCart,
+    openSellerModal,
+    currentRetailer,
+    addToast
   } = useApp();
 
   const [orderNotes, setOrderNotes] = useState(
@@ -60,13 +60,21 @@ export default function RetailerCartPage() {
     router.push('/retailer/checkout');
   };
 
+  const gstBreakdown = cart.items.map((item) => ({
+    name: item.product.name,
+    rate: Number(item.product.gstRate ?? 0),
+    amount: Math.round(
+      (item.lineSubtotal * Number(item.product.gstRate ?? 0)) / 100
+    ),
+  }));
+
   return (
     <div className="flex flex-col min-h-screen">
       <RetailerHeader />
 
       <main className="flex-1 py-8 bg-[#faf8f5]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          
+
           {/* Breadcrumbs & Title */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -124,7 +132,7 @@ export default function RetailerCartPage() {
             </div>
           ) : cart.items.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
+
               {/* Left Column: Automated Dual GST Entity Breakdown */}
               <div className="lg:col-span-8 space-y-6">
                 <GSTEntityBreakdown summaries={cart.entitySummaries} isEditable={true} />
@@ -150,7 +158,7 @@ export default function RetailerCartPage() {
               {/* Right Column: Master Order Commercial Summary */}
               <div className="lg:col-span-4 space-y-6">
                 <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-md space-y-5 text-xs">
-                  
+
                   <div className="border-b border-stone-100 pb-3">
                     <span className="text-[10px] uppercase font-bold text-stone-400 block tracking-wider">
                       Master Commercial Estimate
@@ -184,12 +192,20 @@ export default function RetailerCartPage() {
                       </span>
                     </div>
 
-                    <div className="flex justify-between">
-                      <span>Applicable GST (5%):</span>
-                      <span className="font-mono text-stone-800">
-                        ₹{cart.estimatedGst.toLocaleString('en-IN')}
-                      </span>
-                    </div>
+                    {gstBreakdown.map((gst) => (
+                      <div
+                        key={`${gst.name}-${gst.rate}`}
+                        className="flex justify-between text-[11px]"
+                      >
+                        <span>
+                          {gst.name} (GST {gst.rate}%)
+                        </span>
+
+                        <span className="font-mono">
+                          ₹{gst.amount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    ))}
 
                     <div className="flex justify-between">
                       <span>Est. Surface Freight:</span>
@@ -200,7 +216,7 @@ export default function RetailerCartPage() {
 
                     {/* Master Grand Total */}
                     <div className="border-t-2 border-stone-900 pt-3 flex justify-between items-baseline text-stone-900">
-                      <span className="font-bold text-sm">Grand Order Total:</span>
+                      <span className="font-bold text-sm">Grand Order estimate Total:</span>
                       <span className="text-xl font-bold font-mono text-[#831843]">
                         ₹{cart.estimatedTotal.toLocaleString('en-IN')}
                       </span>
@@ -223,11 +239,10 @@ export default function RetailerCartPage() {
                     type="button"
                     onClick={handleProceedToCheckout}
                     disabled={!moqEvaluation?.isMet}
-                    className={`w-full py-4 rounded-2xl text-xs font-bold shadow-lg transition flex items-center justify-center gap-2 ${
-                      moqEvaluation?.isMet
-                        ? 'bg-gradient-to-r from-[#831843] to-[#9a3412] hover:from-[#701a75] hover:to-[#852e10] text-white cursor-pointer'
-                        : 'bg-stone-200 text-stone-500 cursor-not-allowed'
-                    }`}
+                    className={`w-full py-4 rounded-2xl text-xs font-bold shadow-lg transition flex items-center justify-center gap-2 ${moqEvaluation?.isMet
+                      ? 'bg-gradient-to-r from-[#831843] to-[#9a3412] hover:from-[#701a75] hover:to-[#852e10] text-white cursor-pointer'
+                      : 'bg-stone-200 text-stone-500 cursor-not-allowed'
+                      }`}
                   >
                     <span>Proceed to Order Enquiry Checkout</span>
                     <ArrowRight className="w-4 h-4" />

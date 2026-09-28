@@ -193,7 +193,7 @@ function RetailerCatalogueContent() {
                 <span className="text-stone-900 font-semibold">Wholesale Catalogue</span>
               </nav>
               <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
-                Live Wholesale Kurti Catalogue
+                Live Wholesale Products Catalogue
               </h1>
             </div>
 

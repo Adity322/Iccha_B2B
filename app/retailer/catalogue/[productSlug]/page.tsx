@@ -365,7 +365,7 @@ export default function RetailerProductDetailPage() {
                   {/* Piece Rate */}
                   <div>
                     <span className="text-[10px] uppercase font-bold text-stone-400 block tracking-wider">
-                      Wholesale Piece Rate
+                      Wholesale estimated Piece Rate
                     </span>
 
                     <div className="flex items-baseline gap-1.5">

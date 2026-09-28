@@ -25,7 +25,7 @@ const CART_ITEM_INCLUDE = {
                 },
             },
             gstConfig: true,
-            category: { select: { requiresSize: true } },
+            category: { select: { requiresSize: true, gst:true } },
             sizes: { orderBy: { sortOrder: "asc" } },
         },
     },
@@ -79,6 +79,7 @@ const FLAT_SHIPPING = 350;
 export async function serializeCartFull(cart: CartWithItems, retailerProfileId: string) {
     const rawItems = cart.items.map((item) => {
         const p = item.product;
+        const rate = item?.product?.category?.gst;
         const gstRate = p.gstConfig
             ? Number(p.gstConfig.cgstRate) + Number(p.gstConfig.sgstRate)
             : 5;
@@ -113,7 +114,7 @@ export async function serializeCartFull(cart: CartWithItems, retailerProfileId: 
                 minOrderSets: p.minOrderSets,
                 isActive: p.isActive,
                 vendorName: p.vendor?.businessName || "IcchaStore",
-                gstRate,
+                gstRate: rate,
                 hsn: p.gstConfig?.hsnCode ?? p.hsnCode,
                 media: [{ url: p.media[0]?.mediaAsset?.publicUrl || null }],
             },
