@@ -217,7 +217,7 @@ export default function RetailerCheckoutPage() {
               B2B Semi-Ecommerce Dispatch
             </span>
             <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-              Finalize Master Order Enquiry
+              Finalize Master Order Estimate
             </h1>
             <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
               Review seller-wise allocations, transport details, and generate formal Proforma Estimates.
@@ -326,7 +326,7 @@ export default function RetailerCheckoutPage() {
               </div>
 
               {/* Transporter Preferences */}
-              <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-4">
+              {/* <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-4">
                 <h3 className="font-serif text-base font-bold text-stone-900 flex items-center gap-2">
                   <Truck className="w-4 h-4 text-[#831843]" />
                   3. Transporter & Road Freight Details
@@ -372,7 +372,7 @@ export default function RetailerCheckoutPage() {
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-medium focus:outline-none focus:border-rose-900"
                   />
                 </div>
-              </div>
+              </div> */}
 
             </div>
 
