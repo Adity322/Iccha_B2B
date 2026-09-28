@@ -96,6 +96,45 @@ const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1583391733956-3750e0ff
     };
   }
 
+  const vendorSelect = {
+    id: true,
+    businessName: true,
+    city: true,
+    state: true,
+    bannerAsset: { select: { publicUrl: true } },
+    _count: { select: { products: { where: { isActive: true } } } },
+    products: {
+      where: { isActive: true, media: { some: {} } },
+      take: 4,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        media: {
+          take: 1,
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+          select: { mediaAsset: { select: { publicUrl: true } } },
+        },
+      },
+    },
+  } satisfies Prisma.VendorProfileSelect;
+
+  type DbVendor = Prisma.VendorProfileGetPayload<{ select: typeof vendorSelect }>;
+
+  function toVendor(v: DbVendor) {
+    const images = v.products
+      .map((p) => p.media[0]?.mediaAsset.publicUrl)
+      .filter((url): url is string => Boolean(url));
+
+    return {
+      id: v.id,
+      name: v.businessName,
+      location: [v.city, v.state].filter(Boolean).join(', '),
+      productCount: v._count.products,
+      images,
+      // uploaded banner -> latest product photo -> placeholder
+      image: v.bannerAsset?.publicUrl ?? images[0] ?? FALLBACK_IMAGE,
+    };
+  }
+
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const getCatSlug = params.get("catSlug");
@@ -114,7 +153,7 @@ export async function GET(req: NextRequest) {
       { status: 200 },
     );
   }
-  const [products, categories] = await prisma.$transaction([
+  const [products, categories, vendors] = await prisma.$transaction([
     prisma.product.findMany({
       take: 8,
       orderBy: { createdAt: 'desc' },
@@ -125,6 +164,12 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: categoryInclude
     }),
+    prisma.vendorProfile.findMany({
+      where: { isActive: true, user: { role: 'VENDOR' } },
+      take: 8,
+      orderBy: { businessName: 'asc' },
+      select: vendorSelect,
+    }),
   ]);
   
   const finalCat = categories.map(toCategory);
@@ -134,6 +179,7 @@ export async function GET(req: NextRequest) {
     {
       products: finalPdr,
       categories: finalCat,
+      vendors: vendors.map(toVendor)
     },
     { status: 200 },
   );

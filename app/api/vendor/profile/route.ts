@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
             where: { id: auth.vendorProfile.id },
             include: {
                 _count: { select: { products: true } },
+                bannerAsset: { select: { publicUrl: true } }
             },
         });
 

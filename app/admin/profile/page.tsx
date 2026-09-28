@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 import { useApp } from '@/lib/context/AppContext';
+import Image from 'next/image';
 import { useAdminRole } from '@/components/layout/AdminRoleContext';
 import {
   Save,
@@ -20,6 +21,8 @@ import {
   CheckCircle2,
   XCircle,
   Phone,
+  ImagePlus,
+  Trash2
 } from 'lucide-react';
 
 interface VendorProfileData {
@@ -42,6 +45,7 @@ interface VendorProfileData {
   invoicePrefix: string;
   defaultGstRate: string;
   isActive: boolean;
+  bannerAsset: { publicUrl: string } | null;
 }
 
 export default function ProfilePage() {
@@ -56,6 +60,9 @@ export default function ProfilePage() {
   return <StaffProfilePage />;
 }
 
+const BANNER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const BANNER_MAX_BYTES = 8 * 1024 * 1024;
+
 function VendorProfilePage() {
   const { addToast } = useApp();
   const [profile, setProfile] = useState<VendorProfileData | null>(null);
@@ -64,6 +71,8 @@ function VendorProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const [bannerBusy, setBannerBusy] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
     newPassword: '',
@@ -152,6 +161,59 @@ function VendorProfilePage() {
       addToast({ type: 'error', title: 'Network error', message: 'Could not save changes.' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleBannerSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // lets the vendor re-pick the same file later
+    if (!file) return;
+
+    if (!BANNER_TYPES.includes(file.type)) {
+      addToast({ type: 'error', title: 'Unsupported file', message: 'Please choose a JPG, PNG or WebP image.' });
+      return;
+    }
+    if (file.size > BANNER_MAX_BYTES) {
+      addToast({ type: 'error', title: 'Image too large', message: 'Banner must be 8 MB or smaller.' });
+      return;
+    }
+
+    setBannerBusy(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/vendor/profile/banner', { method: 'POST', body });
+      const json = await res.json();
+      if (json.success) {
+        // Update locally instead of loadProfile(), which would blank the page and drop unsaved edits.
+        setProfile(p => (p ? { ...p, bannerAsset: { publicUrl: json.data.bannerUrl } } : p));
+        addToast({ type: 'success', title: 'Banner Updated', message: 'It now shows on the homepage vendor section.' });
+      } else {
+        addToast({ type: 'error', title: 'Upload failed', message: json.error });
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Network error', message: 'Could not upload the banner.' });
+    } finally {
+      setBannerBusy(false);
+    }
+  };
+
+  const handleBannerRemove = async () => {
+    if (!window.confirm('Remove your banner? Your latest product photo will be shown instead.')) return;
+    setBannerBusy(true);
+    try {
+      const res = await fetch('/api/vendor/profile/banner', { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        setProfile(p => (p ? { ...p, bannerAsset: null } : p));
+        addToast({ type: 'success', title: 'Banner Removed', message: 'Your latest product photo is used instead.' });
+      } else {
+        addToast({ type: 'error', title: 'Remove failed', message: json.error });
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Network error', message: 'Could not remove the banner.' });
+    } finally {
+      setBannerBusy(false);
     }
   };
 
@@ -270,6 +332,77 @@ function VendorProfilePage() {
             <div>
               <span className="text-[10px] uppercase font-bold text-stone-400 block">Default GST Rate</span>
               <span className="font-semibold text-stone-800">{profile.defaultGstRate}%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Storefront banner: the background of your tile on the homepage vendor rail */}
+        <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm text-xs">
+          <h3 className="font-serif text-base font-bold text-stone-900 border-b border-stone-100 pb-2 flex items-center gap-2">
+            <ImagePlus className="w-4 h-4" /> Storefront Banner
+          </h3>
+
+          <div className="mt-4 flex flex-col sm:flex-row gap-5">
+            <div className="relative w-36 shrink-0 aspect-[3/4] overflow-hidden rounded-2xl border border-stone-200 bg-stone-100">
+              {profile.bannerAsset?.publicUrl ? (
+                <Image
+                  src={profile.bannerAsset.publicUrl}
+                  alt="Your storefront banner"
+                  fill
+                  sizes="144px"
+                  className="object-cover object-top"
+                />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-3 text-center text-stone-400">
+                  <ImagePlus className="w-5 h-5" />
+                  <span className="text-[10px] leading-snug">No banner set</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0 space-y-3">
+              <p className="text-stone-600 leading-relaxed">
+                This image is the background of your tile in the &quot;Our trusted vendors&quot; section on the
+                homepage.{' '}
+                {!profile.bannerAsset && 'Until you add one, your latest product photo is shown instead.'}
+              </p>
+
+              <ul className="text-stone-500 space-y-1 list-disc pl-4">
+                <li>JPG, PNG or WebP, up to 8 MB</li>
+                <li>Portrait or square works best (around 1200 × 1400 px)</li>
+                <li>Keep the subject in the upper two-thirds; your name panel covers the bottom</li>
+              </ul>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleBannerSelect}
+                />
+                <button
+                  type="button"
+                  disabled={bannerBusy}
+                  onClick={() => bannerInputRef.current?.click()}
+                  className="px-4 py-2.5 bg-[#831843] hover:bg-rose-900 text-white rounded-xl font-bold text-xs shadow transition flex items-center gap-2 disabled:opacity-60"
+                >
+                  <ImagePlus className="w-3.5 h-3.5" />
+                  <span>{bannerBusy ? 'Working...' : profile.bannerAsset ? 'Replace Banner' : 'Upload Banner'}</span>
+                </button>
+
+                {profile.bannerAsset && (
+                  <button
+                    type="button"
+                    disabled={bannerBusy}
+                    onClick={handleBannerRemove}
+                    className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold text-xs transition flex items-center gap-2 disabled:opacity-60"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
         upiId: true,
         isActive: true,
         createdAt: true,
+        bannerAsset: { select: { publicUrl: true } },
         user: { select: { email: true, lastLoginAt: true } },
         _count: { select: { products: true, warehouses: true, sellerOrders: true } },
       },

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Search, ArrowDownCircle, Trash2, Store, Loader2, Eye } from "lucide-react";
+import { Search, ArrowDownCircle, Trash2, Store, Loader2, Eye, ImagePlus } from "lucide-react";
+import Image from "next/image";
 import AdminSidebar from "@/components/layout/AdminSidebar";
 import { useApp } from "@/lib/context/AppContext";
 
@@ -30,7 +31,11 @@ interface Vendor {
   createdAt: string;
   user: { email: string; lastLoginAt: string | null };
   _count: { products: number; warehouses: number; sellerOrders: number };
+  bannerAsset: { publicUrl: string } | null,
 }
+
+const BANNER_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const BANNER_MAX_BYTES = 8 * 1024 * 1024;
 
 export default function VendorManagement() {
   const { addToast } = useApp();
@@ -41,6 +46,8 @@ export default function VendorManagement() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+  const [bannerBusy, setBannerBusy] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const fetchVendors = async (cursor?: string | null, query = search) => {
@@ -130,6 +137,69 @@ export default function VendorManagement() {
       addToast({ type: "error", title: "Delete failed", message: "Something went wrong." });
     } finally {
       setActionId(null);
+    }
+  };
+
+  // Keep both the table row and the open modal in sync without refetching the list.
+  const applyBanner = (vendorId: string, publicUrl: string | null) => {
+    const bannerAsset = publicUrl ? { publicUrl } : null;
+    setVendors((current) => current.map((v) => (v.id === vendorId ? { ...v, bannerAsset } : v)));
+    setSelectedVendor((current) => (current?.id === vendorId ? { ...current, bannerAsset } : current));
+  };
+
+  const handleBannerSelect = async (event: React.ChangeEvent<HTMLInputElement>, vendor: Vendor) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // lets the same file be picked again later
+    if (!file) return;
+
+    if (!BANNER_TYPES.includes(file.type)) {
+      addToast({ type: "error", title: "Unsupported file", message: "Please choose a JPG, PNG or WebP image." });
+      return;
+    }
+    if (file.size > BANNER_MAX_BYTES) {
+      addToast({ type: "error", title: "Image too large", message: "Banner must be 8 MB or smaller." });
+      return;
+    }
+
+    setBannerBusy(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`/api/admin/vendors/${vendor.id}/banner`, { method: "POST", body });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        addToast({ type: "error", title: "Upload failed", message: result.error || "Please try again." });
+        return;
+      }
+
+      applyBanner(vendor.id, result.data.bannerUrl);
+      addToast({ type: "success", title: "Banner updated", message: `${vendor.businessName}'s homepage banner was changed.` });
+    } catch {
+      addToast({ type: "error", title: "Upload failed", message: "Something went wrong." });
+    } finally {
+      setBannerBusy(false);
+    }
+  };
+
+  const handleBannerRemove = async (vendor: Vendor) => {
+    if (!window.confirm(`Remove the banner for ${vendor.businessName}? Their latest product photo will be shown instead.`)) return;
+    setBannerBusy(true);
+    try {
+      const res = await fetch(`/api/admin/vendors/${vendor.id}/banner`, { method: "DELETE" });
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        addToast({ type: "error", title: "Remove failed", message: result.error || "Please try again." });
+        return;
+      }
+
+      applyBanner(vendor.id, null);
+      addToast({ type: "success", title: "Banner removed", message: "The latest product photo is used instead." });
+    } catch {
+      addToast({ type: "error", title: "Remove failed", message: "Something went wrong." });
+    } finally {
+      setBannerBusy(false);
     }
   };
 
@@ -310,6 +380,64 @@ export default function VendorManagement() {
               <div className="bg-stone-50 rounded-xl border border-stone-200 p-3">
                 <span className="block text-lg font-bold text-stone-900">{selectedVendor._count.sellerOrders}</span>
                 <span className="text-stone-500 text-[10px] uppercase font-bold">Seller Orders</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-bold text-stone-800">Homepage Banner</h4>
+              <div className="flex gap-4 bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="relative w-24 shrink-0 aspect-[3/4] overflow-hidden rounded-xl border border-stone-200 bg-stone-100">
+                  {selectedVendor.bannerAsset?.publicUrl ? (
+                    <Image
+                      src={selectedVendor.bannerAsset.publicUrl}
+                      alt={`${selectedVendor.businessName} banner`}
+                      fill
+                      sizes="96px"
+                      className="object-cover object-top"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-2 text-center text-stone-400">
+                      <ImagePlus className="w-4 h-4" />
+                      <span className="text-[10px] leading-snug">No banner</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0 space-y-3">
+                  <p className="text-stone-500 leading-relaxed">
+                    Shown as this vendor&apos;s tile in the homepage vendor section. Without one, their latest
+                    product photo is used. JPG, PNG or WebP, up to 8 MB; portrait or square works best.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      ref={bannerInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(event) => handleBannerSelect(event, selectedVendor)}
+                    />
+                    <button
+                      type="button"
+                      disabled={bannerBusy}
+                      onClick={() => bannerInputRef.current?.click()}
+                      className="px-3 py-2 bg-[#831843] hover:bg-rose-900 text-white rounded-xl font-bold text-[11px] shadow transition inline-flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      {bannerBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                      <span>{selectedVendor.bannerAsset ? "Replace Banner" : "Upload Banner"}</span>
+                    </button>
+                    {selectedVendor.bannerAsset && (
+                      <button
+                        type="button"
+                        disabled={bannerBusy}
+                        onClick={() => handleBannerRemove(selectedVendor)}
+                        className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold text-[11px] transition inline-flex items-center gap-1.5 disabled:opacity-60"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

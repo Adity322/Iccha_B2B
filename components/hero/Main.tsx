@@ -3,14 +3,14 @@
 import axios from 'axios';
 import React, { useEffect, useState } from 'react'
 import PublicProductCard from '@/components/product/PublicProductCard';
-import CategoryRail from '@/components/category/CategoryRail';
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+// import CategoryRail from '@/components/category/CategoryRail';
+import VendorRail, { RailVendor } from '@/components/vendor/VendorRail';
 import Craft from './Craft';
 
 function HomeElements() {
     const [products, setProducts] = useState<any[]>([])
-    const [categories, setCategories] = useState([])
+    // const [categories, setCategories] = useState([])
+    const [vendors, setVendors] = useState<RailVendor[]>([])
 
 
       const getData = async () => {
@@ -18,7 +18,7 @@ function HomeElements() {
         if (req.status === 200) {
           console.log(req.data)
           setProducts(req.data.products)
-          setCategories(req.data.categories)
+          setVendors(req.data.vendors)
         }
       }
     
@@ -32,27 +32,19 @@ function HomeElements() {
 
             <div className="reveal flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
               <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-black tracking-tight leading-[1.05] max-w-xl">
-                Every category we manufacture
+                Our trusted vendors
               </h2>
-
-              <Link
-                href="/categories"
-                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-black group pb-0.5 border-b border-black transition-opacity duration-200 ease-out hover:opacity-60 shrink-0"
-              >
-                <span>View full catalogue</span>
-                <ChevronRight className="w-4 h-4 transform transition-transform duration-200 ease-out group-hover:translate-x-1" />
-              </Link>
             </div>
 
             <p className="reveal text-[15px] text-neutral-500 leading-relaxed max-w-xl mb-16">
-              {categories.length} styles, cut and stitched across our Surat and Jaipur units — from
-              festive 3-piece sets to everyday cambric cotton.
+              {vendors.length} verified manufacturing partners supplying wholesale ethnic wear
+              across our platform.
             </p>
 
         {
-            categories.length > 0 && (
+            vendors.length > 0 && (
             <div className="reveal">
-              <CategoryRail categories={categories} />
+              <VendorRail vendors={vendors} />
             </div>
             )
         }

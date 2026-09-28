@@ -57,6 +57,8 @@ model VendorProfile {
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   vendorCode     String                 @unique
+  bannerAssetId  String?
+  bannerAsset    MediaAsset?            @relation(fields: [bannerAssetId], references: [id], onDelete: SetNull)
   categories     Category[]
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   products       Product[]
@@ -65,6 +67,7 @@ model VendorProfile {
   uploadSessions ProductUploadSession[]
 
   @@index([businessName])
+  @@index([bannerAssetId])
 }
 
 model Warehouse {
@@ -1007,6 +1010,7 @@ model MediaAsset {
   productMedia        ProductMedia[]
   categoryBanners     Category[]
   collectionBanners   Collection[]
+  vendorBanners       VendorProfile[]
   kycDocuments        KYCDocument[]
   estimatePdfs        Estimate[]
   uploadSessions      ProductUploadSession[]
