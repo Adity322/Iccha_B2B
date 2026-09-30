@@ -15,6 +15,7 @@
     "@hookform/resolvers": "^5.2.1",
     "@prisma/client": "^6.16.3",
     "@types/canvas-confetti": "^1.9.0",
+    "ai-studio-applet": ".",
     "autoprefixer": "^10.4.21",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",

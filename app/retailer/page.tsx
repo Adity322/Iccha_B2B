@@ -120,7 +120,7 @@ export default function RetailerDashboardPage() {
           </div>
 
           {/* Quick Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
 
             <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm space-y-1">
               <div className="flex items-center justify-between text-stone-400">
@@ -172,21 +172,6 @@ export default function RetailerDashboardPage() {
                 ) : (
                   <Link href="/retailer/estimates" className="hover:underline">View estimates &rarr;</Link>
                 )}
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm space-y-1">
-              <div className="flex items-center justify-between text-stone-400">
-                <span className="text-xs uppercase font-bold tracking-wider">Manufacturing Hubs</span>
-                <Building2 className="w-4 h-4 text-rose-800" />
-              </div>
-              <div className={`text-sm font-bold text-stone-900 ${loading ? skeleton : ''}`}>
-                {hubs.length > 0
-                  ? hubs.map((h) => `${h.name} (${h.state})`).join(' & ')
-                  : 'No hubs assigned yet'}
-              </div>
-              <div className="text-xs text-stone-500 pt-1">
-                {data?.activeEnquiries ?? 0} active enquir{data?.activeEnquiries === 1 ? 'y' : 'ies'} &bull; {data?.dispatchedOrders ?? 0} dispatched
               </div>
             </div>
 

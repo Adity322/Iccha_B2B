@@ -6,18 +6,11 @@ import {
   Receipt, 
   Printer, 
   Building2, 
-  Search, 
-  Eye, 
-  Clock, 
-  CheckCircle2, 
-  ShieldCheck, 
-  ArrowRight 
 } from 'lucide-react';
 import RetailerHeader from '@/components/layout/RetailerHeader';
 import Footer from '@/components/layout/Footer';
 import EstimateViewModal from '@/components/order/EstimateViewModal';
 import { EstimateDocument, BillingEntity, OrderItem, Address } from '@/lib/types';
-import { useApp } from '@/lib/context/AppContext';
 
 export default function RetailerEstimatesPage() {
   const [estimates, setEstimates] = useState<EstimateDocument[]>([]);
@@ -217,9 +210,6 @@ export default function RetailerEstimatesPage() {
                         }`}>
                           <Building2 className="w-3 h-3" />
                           {isPlatform ? 'IcchaStore' : 'Vendor'}
-                        </span>
-                        <span className="font-mono text-stone-500 font-semibold">
-                          #{est.estimateNumber}
                         </span>
                       </div>
 

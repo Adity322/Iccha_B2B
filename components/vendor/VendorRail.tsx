@@ -10,7 +10,8 @@ export interface RailVendor {
   location: string;
   productCount: number;
   image: string;
-}
+  products?: []
+ }
 
 interface VendorRailProps {
   vendors: readonly RailVendor[];

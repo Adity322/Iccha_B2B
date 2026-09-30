@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -56,10 +56,18 @@ interface CartSummary {
   items: { productId: string; sets: number }[];
 }
 
+interface Filters {
+  categoryId: string;
+  vendorId: string;
+  search: string;
+}
+
 function RetailerCatalogueContent() {
   const searchParams = useSearchParams();
+
   const [products, setProducts] = useState<RetailerProduct[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [cartSummary, setCartSummary] = useState<CartSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -68,13 +76,31 @@ function RetailerCatalogueContent() {
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedVendor, setSelectedVendor] = useState<string>(searchParams.get('vendor') || 'all');
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const isFetchingRef = useRef(false);
+
+  const filters = useMemo<Filters>(
+    () => ({ categoryId: selectedCategory, vendorId: selectedVendor, search: appliedSearch }),
+    [selectedCategory, selectedVendor, appliedSearch]
+  );
+
+  // Only categories that actually have products (built from loaded products)
+  const categories = useMemo<Category[]>(
+    () =>
+      Object.entries(categoryMap)
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [categoryMap]
+  );
+
+  const cartItemsById = useMemo(
+    () => new Map((cartSummary?.items ?? []).map(i => [i.productId, i] as const)),
+    [cartSummary]
+  );
 
   const refreshCart = useCallback(() => {
     fetch('/api/retailer/cart')
@@ -83,19 +109,12 @@ function RetailerCatalogueContent() {
         if (json.success) setCartSummary(json.data);
       })
       .catch(() => {
-        // Cart pill will just show nothing / stay stale until next successful refresh.
+        // Cart pill stays stale until next successful refresh.
       });
   }, []);
 
+  // One-time data: vendors + cart
   useEffect(() => {
-    fetch('/api/admin/categories')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) setCategories(json.data);
-      })
-      .catch(() => {
-        // Category filter list will just be empty.
-      });
     fetch('/api/retailer/vendors')
       .then(res => res.json())
       .then(json => {
@@ -105,33 +124,61 @@ function RetailerCatalogueContent() {
         // Vendor filter list will just be empty.
       });
     refreshCart();
+
+    return () => abortRef.current?.abort();
   }, [refreshCart]);
 
-  const loadProducts = useCallback(async (categoryId: string, searchTerm: string, vendorId: string, cursor?: string) => {
-    const requestId = ++requestIdRef.current;
+  const loadProducts = useCallback(async (f: Filters, cursor?: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     isFetchingRef.current = true;
-    if (cursor) setLoadingMore(true); else setLoading(true);
+
+    if (cursor) setLoadingMore(true);
+    else setLoading(true);
 
     try {
       const params = new URLSearchParams();
-      if (categoryId !== 'all') params.set('categoryId', categoryId);
-      if (vendorId !== 'all') params.set('vendorId', vendorId);
-      if (searchTerm) params.set('search', searchTerm);
+      if (f.categoryId !== 'all') params.set('categoryId', f.categoryId);
+      if (f.vendorId !== 'all') params.set('vendorId', f.vendorId);
+      if (f.search) params.set('search', f.search);
       if (cursor) params.set('cursor', cursor);
 
-      const res = await fetch(`/api/retailer/products?${params.toString()}`);
+      const res = await fetch(`/api/retailer/products?${params.toString()}`, {
+        signal: controller.signal
+      });
       const json = await res.json();
 
-      if (requestId !== requestIdRef.current) return;
+      if (controller.signal.aborted) return;
 
       if (json.success) {
-        setProducts(prev => (cursor ? [...prev, ...json.data] : json.data));
-        setNextCursor(json.nextCursor);
+        const incoming: RetailerProduct[] = json.data;
+
+        setProducts(prev => {
+          if (!cursor) return incoming;
+          const seen = new Set(prev.map(p => p.id));
+          return [...prev, ...incoming.filter(p => !seen.has(p.id))];
+        });
+
+        // Accumulate categories that have products
+        setCategoryMap(prev => {
+          let next = prev;
+          for (const p of incoming) {
+            if (p.categoryId && p.category?.name && !next[p.categoryId]) {
+              if (next === prev) next = { ...prev };
+              next[p.categoryId] = p.category.name;
+            }
+          }
+          return next;
+        });
+
+        setNextCursor(json.nextCursor ?? null);
       }
-    } catch {
-      // Leave existing products in place.
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
+      // Otherwise leave existing products in place.
     } finally {
-      if (requestId === requestIdRef.current) {
+      if (abortRef.current === controller) {
         isFetchingRef.current = false;
         setLoading(false);
         setLoadingMore(false);
@@ -139,21 +186,21 @@ function RetailerCatalogueContent() {
     }
   }, []);
 
+  // Reload from page 1 whenever any filter changes
   useEffect(() => {
     setNextCursor(null);
-    loadProducts(selectedCategory, appliedSearch, selectedVendor);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, selectedVendor]);
+    loadProducts(filters);
+  }, [filters, loadProducts]);
 
-  // Infinite scroll: load the next page when the sentinel enters the viewport
+  // Infinite scroll: load next page when sentinel enters viewport
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node || !nextCursor) return;
 
     const observer = new IntersectionObserver(
-      (entries) => {
+      entries => {
         if (entries[0].isIntersecting && !isFetchingRef.current) {
-          loadProducts(selectedCategory, appliedSearch, nextCursor);
+          loadProducts(filters, nextCursor);
         }
       },
       { rootMargin: '300px' }
@@ -161,58 +208,42 @@ function RetailerCatalogueContent() {
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [nextCursor, selectedCategory, appliedSearch, loading, loadingMore, loadProducts]);
+  }, [nextCursor, filters, loading, loadProducts]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const term = search.trim();
-    setAppliedSearch(term);
-    setNextCursor(null);
-    loadProducts(selectedCategory, term, selectedVendor);
-  };
+  const handleSearchSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      setAppliedSearch(search.trim());
+    },
+    [search]
+  );
 
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     setSearch('');
     setAppliedSearch('');
-    setNextCursor(null);
-    loadProducts(selectedCategory, '', selectedVendor);
-  };
+  }, []);
 
-  const resetFilters = () => {
+  const handleVendorChange = useCallback((vendorId: string) => {
+    setSelectedVendor(vendorId);
+    setSelectedCategory('all'); // category may not exist for the new vendor
+    setCategoryMap({});         // rebuild categories from this vendor's products
+  }, []);
+
+  const resetFilters = useCallback(() => {
     setSearch('');
     setAppliedSearch('');
-    setNextCursor(null);
-    const categoryChanging = selectedCategory !== 'all';
-    const vendorChanging = selectedVendor !== 'all';
-    if (categoryChanging) setSelectedCategory('all');
-    if (vendorChanging) setSelectedVendor('all');
-    if (!categoryChanging && !vendorChanging) {
-      loadProducts('all', '', 'all'); // nothing changed to trigger the effect above, so reload directly
+    setSelectedCategory('all');
+    if (selectedVendor !== 'all') {
+      setSelectedVendor('all');
+      setCategoryMap({});
     }
-  };
+  }, [selectedVendor]);
 
   const activeFiltersCount = [
     selectedCategory !== 'all',
     selectedVendor !== 'all',
-    search.trim().length > 0
+    appliedSearch.length > 0
   ].filter(Boolean).length;
-
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !nextCursor) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !isFetchingRef.current) {
-          loadProducts(selectedCategory, appliedSearch, selectedVendor, nextCursor);
-        }
-      },
-      { rootMargin: '300px' }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [nextCursor, selectedCategory, selectedVendor, appliedSearch, loading, loadingMore, loadProducts]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -272,7 +303,7 @@ function RetailerCatalogueContent() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)}
+                onClick={() => setIsMobileFilterOpen(v => !v)}
                 className="md:hidden px-3.5 py-2.5 bg-stone-900 text-white rounded-xl font-semibold flex items-center gap-1.5"
               >
                 <Filter className="w-3.5 h-3.5" />
@@ -309,7 +340,7 @@ function RetailerCatalogueContent() {
                   <div className="max-h-64 overflow-y-auto space-y-0.5 -mx-1 pr-1">
                     <button
                       type="button"
-                      onClick={() => setSelectedVendor('all')}
+                      onClick={() => handleVendorChange('all')}
                       className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
                         selectedVendor === 'all'
                           ? 'bg-stone-900 text-white font-semibold'
@@ -322,7 +353,7 @@ function RetailerCatalogueContent() {
                       <button
                         key={v.id}
                         type="button"
-                        onClick={() => setSelectedVendor(v.id)}
+                        onClick={() => handleVendorChange(v.id)}
                         className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
                           selectedVendor === v.id
                             ? 'bg-[#831843] text-white font-semibold'
@@ -336,41 +367,43 @@ function RetailerCatalogueContent() {
                 </div>
               </aside>
 
-              {/* Category Filters */}
-              <aside className="bg-white rounded-xl px-4 py-5 border border-stone-200 shadow-sm">
-                <div className="space-y-1.5">
-                  <label className="font-bold text-stone-500 uppercase tracking-wider text-[10px] block">
-                    Category ({categories.length})
-                  </label>
-                  <div className="max-h-96 overflow-y-auto space-y-0.5 -mx-1 pr-1">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory('all')}
-                      className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
-                        selectedCategory === 'all'
-                          ? 'bg-stone-900 text-white font-semibold'
-                          : 'text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      All Categories
-                    </button>
-                    {categories.map(c => (
+              {/* Category Filters (only categories that have products) */}
+              {categories.length > 0 && (
+                <aside className="bg-white rounded-xl px-4 py-5 border border-stone-200 shadow-sm">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-stone-500 uppercase tracking-wider text-[10px] block">
+                      Category ({categories.length})
+                    </label>
+                    <div className="max-h-96 overflow-y-auto space-y-0.5 -mx-1 pr-1">
                       <button
-                        key={c.id}
                         type="button"
-                        onClick={() => setSelectedCategory(c.id)}
+                        onClick={() => setSelectedCategory('all')}
                         className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
-                          selectedCategory === c.id
-                            ? 'bg-[#831843] text-white font-semibold'
+                          selectedCategory === 'all'
+                            ? 'bg-stone-900 text-white font-semibold'
                             : 'text-stone-600 hover:bg-stone-100'
                         }`}
                       >
-                        <span className="block truncate">{c.name}</span>
+                        All Categories
                       </button>
-                    ))}
+                      {categories.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setSelectedCategory(c.id)}
+                          className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
+                            selectedCategory === c.id
+                              ? 'bg-[#831843] text-white font-semibold'
+                              : 'text-stone-600 hover:bg-stone-100'
+                          }`}
+                        >
+                          <span className="block truncate">{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </aside>
+                </aside>
+              )}
             </div>
 
             <div className="md:col-span-9 space-y-3">
@@ -386,11 +419,11 @@ function RetailerCatalogueContent() {
               ) : products.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {products.map((product) => (
+                    {products.map(product => (
                       <RetailerProductCard
                         key={product.id}
                         product={product}
-                        cartItem={cartSummary?.items.find(i => i.productId === product.id)}
+                        cartItem={cartItemsById.get(product.id)}
                         onCartChanged={refreshCart}
                       />
                     ))}
