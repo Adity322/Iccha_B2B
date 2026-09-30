@@ -15,11 +15,17 @@ export async function GET(request: NextRequest) {
     const cursor = searchParams.get("cursor");
     const search = searchParams.get("search")?.trim();
     const categoryId = searchParams.get("categoryId");
+    const vendorId = searchParams.get("vendorId");
 
     const products = await prisma.product.findMany({
       where: {
         isActive: true,
         ...(categoryId ? { categoryId } : {}),
+        ...(vendorId === "icchastore"
+          ? { vendorId: null }
+          : vendorId
+            ? { vendorId }
+            : {}),
         ...(search
           ? {
               OR: [

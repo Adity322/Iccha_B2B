@@ -37,6 +37,8 @@ interface Vendor {
   isActive: boolean;
 }
 
+const GST_PRESETS = ['0', '0.25', '1.5', '3', '5', '18', '40'];
+
 export default function AdminCategoriesPage() {
   const { addToast } = useApp();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -59,6 +61,8 @@ export default function AdminCategoriesPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedOwner, setSelectedOwner] = useState("admin");
   const [isStaff, setIsStaff] = useState<boolean | null>(null);
+
+  const [gstMode, setGstMode] = useState<'preset' | 'custom'>('preset');
 
   const [vendorSearch, setVendorSearch] = useState("");
   const [vendorCursor, setVendorCursor] = useState<string | null>(null);
@@ -204,17 +208,26 @@ export default function AdminCategoriesPage() {
   const openAddModal = () => {
     setEditingCategory(null);
     setFormData({ name: '', slug: '', description: '', requiresSize: false, gst: '' });
+    setGstMode('preset');
     setIsModalOpen(true);
   };
 
   const openEditModal = (c: Category) => {
     setEditingCategory(c);
     setFormData({ name: c.name, slug: c.slug, description: c.description || '', requiresSize: c.requiresSize, gst: c.gst || '' });
+    setGstMode(c.gst && !GST_PRESETS.includes(c.gst) ? 'custom' : 'preset');
     setIsModalOpen(true);
   };
 
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (gstMode === 'custom') {
+      const parsed = Number(formData.gst);
+      if (formData.gst.trim() === '' || Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+        addToast({ type: 'error', title: 'Invalid GST rate', message: 'Enter a GST percentage between 0 and 100.' });
+        return;
+      }
+    }
     const slug = formData.slug || formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     let mediaAssetId: string | undefined;
@@ -663,13 +676,17 @@ export default function AdminCategoriesPage() {
                 </label>
 
                 <select
-                  value={formData.gst}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      gst: e.target.value,
-                    })
-                  }
+                  value={gstMode === 'custom' ? 'custom' : formData.gst}
+                  onChange={e => {
+                    const value = e.target.value;
+                    if (value === 'custom') {
+                      setGstMode('custom');
+                      setFormData(prev => ({ ...prev, gst: GST_PRESETS.includes(prev.gst) ? '' : prev.gst }));
+                    } else {
+                      setGstMode('preset');
+                      setFormData(prev => ({ ...prev, gst: value }));
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"
                 >
                   <option value="">Select GST rate</option>
@@ -680,7 +697,14 @@ export default function AdminCategoriesPage() {
                   <option value="5">5%</option>
                   <option value="18">18%</option>
                   <option value="40">40%</option>
+                  <option value="custom">Custom %</option>
                 </select>
+
+                {gstMode === 'custom' && (
+                  <input type="number" min={0} max={100} step="0.01" value={formData.gst}
+                    onChange={e => setFormData({ ...formData, gst: e.target.value })}
+                    placeholder="Enter GST % (0–100)" className="w-full mt-2 px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:border-rose-900"/>
+                )}
               </div>
               <div>
                 <label className="block font-bold text-stone-800 mb-1">Cover Image</label>

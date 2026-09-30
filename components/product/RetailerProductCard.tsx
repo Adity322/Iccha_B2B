@@ -23,6 +23,7 @@ interface RetailerProduct {
   piecesPerSet: number;
   wholesalePricePerSet: string | number;
   availableSets: number;
+  minOrderSets: number;
   sizeCombination: string;
   fabric: string;
   workType?: string;
@@ -42,7 +43,8 @@ interface RetailerProductCardProps {
  * bottom edge with a gradient blend so the two read as a single card.
  */
 export default function RetailerProductCard({ product, cartItem, onCartChanged }: RetailerProductCardProps) {
-  const [setsToAdd, setSetsToAdd] = useState(product?.minOrderSets);
+  const minOrderSets = Math.max(1, product.minOrderSets || 1);
+  const [setsToAdd, setSetsToAdd] = useState(minOrderSets);
   const [justAdded, setJustAdded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,8 +210,9 @@ export default function RetailerProductCard({ product, cartItem, onCartChanged }
                 <div className="flex h-9 shrink-0 items-center rounded-full border border-white/25 px-1">
                   <button
                     type="button"
-                    onClick={() => setSetsToAdd(Math.max(1, setsToAdd - 1))}
-                    className="grid h-6 w-6 place-items-center rounded-full text-white/80 transition hover:bg-white/15"
+                    onClick={() => setSetsToAdd(Math.max(minOrderSets, setsToAdd - 1))}
+                    disabled={setsToAdd <= minOrderSets}
+                    className="grid h-6 w-6 place-items-center rounded-full text-white/80 transition hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     aria-label="Decrease sets"
                   >
                     <Minus className="h-3 w-3" />

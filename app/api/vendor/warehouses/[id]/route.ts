@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff, requireVendor } from "@/lib/auth/guard";
+import { z } from "zod";
+
+const updateWarehouseSchema = z.object({
+    name: z.string().trim().min(1, "Warehouse name is required"),
+    address: z.string().trim().optional().or(z.literal("")),
+    city: z.string().trim().optional().or(z.literal("")),
+    state: z.string().trim().optional().or(z.literal("")),
+    pincode: z.string().trim().optional().or(z.literal("")),
+});
 
 async function authenticateEither(request: NextRequest) {
     const staffResult = await requireStaff(request);
@@ -19,6 +28,82 @@ async function authenticateEither(request: NextRequest) {
         error: "Admin or vendor access required",
         status: 401 as const,
     };
+}
+
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const auth = await authenticateEither(request);
+
+        if ("error" in auth) {
+            return NextResponse.json(
+                { success: false, error: auth.error },
+                { status: auth.status }
+            );
+        }
+
+        const { id } = await params;
+
+        const warehouse = await prisma.warehouse.findUnique({ where: { id } });
+
+        if (!warehouse) {
+            return NextResponse.json(
+                { success: false, error: "Warehouse not found" },
+                { status: 404 }
+            );
+        }
+
+        // Same ownership rule as DELETE: vendors edit only their own
+        // warehouses, staff only the platform pool (vendorId = null).
+        const owns =
+            auth.kind === "vendor"
+                ? warehouse.vendorId === auth.vendorProfile.id
+                : warehouse.vendorId === null;
+
+        if (!owns) {
+            return NextResponse.json(
+                { success: false, error: "You don't have permission to edit this warehouse" },
+                { status: 403 }
+            );
+        }
+
+        const body = await request.json();
+        const parsed = updateWarehouseSchema.safeParse(body);
+
+        if (!parsed.success) {
+            return NextResponse.json(
+                { success: false, error: parsed.error.issues[0].message },
+                { status: 400 }
+            );
+        }
+
+        const data = parsed.data;
+
+        const updated = await prisma.warehouse.update({
+            where: { id },
+            data: {
+                name: data.name,
+                address: data.address || null,
+                city: data.city || null,
+                state: data.state || null,
+                pincode: data.pincode || null,
+            },
+        });
+
+        return NextResponse.json({
+            success: true,
+            data: { ...updated, vendorName: null, isMine: true },
+        });
+    } catch (error) {
+        console.error("Update warehouse error:", error);
+
+        return NextResponse.json(
+            { success: false, error: "Something went wrong. Please try again." },
+            { status: 500 }
+        );
+    }
 }
 
 export async function DELETE(

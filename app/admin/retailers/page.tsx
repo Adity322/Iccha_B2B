@@ -179,91 +179,98 @@ export default function AdminRetailersPage() {
             Loading retailer accounts...
           </div>
         ) : retailers.length > 0 ? (
-          <><div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {retailers.map((ret) => (
-                <div
-                  key={ret.id}
-                  className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm hover:shadow-md transition space-y-4 text-xs flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 rounded-xl bg-rose-50 text-[#831843] flex items-center justify-center font-bold font-serif text-lg">
-                          {ret.businessName.charAt(0)}
-                        </div>
-                        <div>
-                          <strong className="text-stone-900 text-sm block">{ret.businessName}</strong>
-                          <span className="text-[10px] text-stone-500">{ret.applicantName} ({ret.mobile})</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-1">
-                        {ret.businessType === 'drop_shipper' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900">
-                            DROP SHIPPER
+          <>
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden text-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold">
+                    <tr>
+                      <th className="text-left p-4">Business</th>
+                      <th className="text-left p-4">GSTIN</th>
+                      <th className="text-left p-4">Location</th>
+                      <th className="text-left p-4">Status</th>
+                      <th className="text-left p-4">MOQ Policy</th>
+                      <th className="text-right p-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {retailers.map((ret) => (
+                      <tr key={ret.id} className="border-t border-stone-100 align-top">
+                        <td className="p-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-rose-50 text-[#831843] flex items-center justify-center font-bold font-serif text-sm">
+                              {ret.businessName.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <strong className="text-stone-900 block truncate">{ret.businessName}</strong>
+                              <span className="text-[10px] text-stone-500 block truncate">
+                                {ret.applicantName} ({ret.mobile})
+                              </span>
+                              {ret.businessType === 'drop_shipper' && (
+                                <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900">
+                                  DROP SHIPPER
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 font-mono font-bold text-stone-800 whitespace-nowrap">
+                          {ret.gstin || 'Not Required'}
+                        </td>
+                        <td className="p-4 text-stone-600 whitespace-nowrap">
+                          {ret.city ? `${ret.city}, ${ret.state}` : 'Not provided'}
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${ret.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900' :
+                              ret.status === 'APPLICATION_RECEIVED' ? 'bg-amber-100 text-amber-900' :
+                                ret.status === 'UNDER_REVIEW' ? 'bg-sky-100 text-sky-900' :
+                                  ret.status === 'ADDITIONAL_INFORMATION_REQUIRED' ? 'bg-orange-100 text-orange-900' :
+                                    'bg-rose-100 text-rose-900'}`}>
+                            {ret.status.replace(/_/g, ' ')}
                           </span>
-                        )}
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${ret.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900' :
-                            ret.status === 'APPLICATION_RECEIVED' ? 'bg-amber-100 text-amber-900' :
-                              ret.status === 'UNDER_REVIEW' ? 'bg-sky-100 text-sky-900' :
-                                ret.status === 'ADDITIONAL_INFORMATION_REQUIRED' ? 'bg-orange-100 text-orange-900' :
-                                  'bg-rose-100 text-rose-900'}`}>
-                          {ret.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 space-y-1 text-stone-600">
-                      <div className="flex justify-between">
-                        <span>GSTIN:</span>
-                        <span className="font-mono font-bold text-stone-800">{ret.gstin || 'Not Required'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Location:</span>
-                        <span>{ret.city ? `${ret.city}, ${ret.state}` : 'Not provided'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>MOQ Policy:</span>
-                        <strong className={ret.moqOverride ? 'text-amber-800 font-bold' : 'text-stone-700'}>
-                          {ret.moqOverride ? `Custom (${ret.customMoqSets} Sets)` : 'Default (4 Sets)'}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                    <Link
-                      href={`/admin/kyc?search=${encodeURIComponent(ret.businessName)}`}
-                      className="text-xs font-semibold text-stone-600 hover:text-stone-900"
-                    >
-                      View KYC Proofs
-                    </Link>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedRetailer(ret)}
-                        className="px-3.5 py-1.5 bg-[#831843] hover:bg-rose-900 text-white rounded-lg font-bold text-[11px] shadow transition flex items-center gap-1"
-                      >
-                        <Sliders className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Set MOQ Policy</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => handleDelete(ret)}
-                        className="p-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                        title="Delete retailer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div><div ref={loadMoreRef} className="h-8 flex items-center justify-center text-[10px] text-stone-400">
-                {loadingMore ? 'Loading more retailers...' : nextCursor ? '' : ''}
-              </div></>
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <strong className={ret.moqOverride ? 'text-amber-800 font-bold' : 'text-stone-700'}>
+                            {ret.moqOverride ? `Custom (${ret.customMoqSets} Sets)` : 'Default (4 Sets)'}
+                          </strong>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex justify-end items-center gap-3 whitespace-nowrap">
+                            <Link
+                              href={`/admin/kyc?search=${encodeURIComponent(ret.businessName)}`}
+                              className="font-semibold text-stone-600 hover:text-stone-900"
+                            >
+                              KYC
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRetailer(ret)}
+                              className="px-3 py-1.5 bg-[#831843] hover:bg-rose-900 text-white rounded-lg font-bold text-[11px] shadow transition inline-flex items-center gap-1"
+                            >
+                              <Sliders className="w-3.5 h-3.5 text-amber-300" />
+                              <span>MOQ</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => handleDelete(ret)}
+                              className="p-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                              title="Delete retailer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div ref={loadMoreRef} className="h-8 flex items-center justify-center text-[10px] text-stone-400">
+              {loadingMore ? 'Loading more retailers...' : ''}
+            </div>
+          </>
         ) : (
           <div className="p-16 bg-white rounded-3xl border border-stone-200 text-center text-xs text-stone-500">
             No retailer accounts found.

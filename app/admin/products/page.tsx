@@ -914,14 +914,13 @@ export default function AdminProductsPage() {
                       <th className="p-4">Category</th>
                       <th className="p-4">Warehouse</th>
                       <th className="p-4">Piece / Set Rate</th>
-                      <th className="p-4">Stock (Sets)</th>
                       <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100 text-stone-700 font-medium">
                     {products.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-stone-400">
+                        <td colSpan={6} className="p-8 text-center text-stone-400">
                           No products found.
                         </td>
                       </tr>
@@ -982,12 +981,6 @@ export default function AdminProductsPage() {
                           </div>
                           <span className="font-mono text-rose-900 text-[11px]">
                             ₹{Number(p.wholesalePricePerSet).toLocaleString('en-IN')} /set ({p.piecesPerSet} pcs)
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${p.availableSets <= 8 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-                            }`}>
-                            {p.availableSets} Sets
                           </span>
                         </td>
                         <td className="p-4 text-right">
@@ -1286,61 +1279,6 @@ export default function AdminProductsPage() {
                       onChange={e => setFormData({ ...formData, piecesPerSet: Number(e.target.value) })}
                       className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono focus:outline-none focus:border-rose-900"
                     />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-stone-800 mb-1">Stock (Sets) *</label>
-                    {categories.find(c => c.id === formData.categoryId)?.requiresSize ? (
-                      <>
-                        <input
-                          type="number"
-                          disabled
-                          readOnly
-                          value={sizeStocks.reduce((sum, item) => sum + Number(item.availableSets || 0), 0)}
-                          className="w-full px-3 py-2 bg-stone-100 border border-stone-200 rounded-xl font-mono font-bold text-stone-500 cursor-not-allowed"
-                        />
-                        <p className="text-[10px] text-stone-400 mt-1">
-                          Auto-calculated from the size-wise stock below.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        {editingProduct && currentUserRole === 'VENDOR' ? (
-                          <>
-                            <div className="px-3 py-2 bg-stone-100 border border-stone-200 rounded-xl font-mono font-bold text-stone-600">
-                              {formData.availableSets} current sets
-                            </div>
-                            <input
-                              type="number"
-                              min={0}
-                              value={stockAddition}
-                              onChange={e => setStockAddition(Number(e.target.value))}
-                              placeholder="0"
-                              className="w-full mt-2 px-3 py-2 bg-white border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
-                            />
-                            <p className="text-[10px] text-stone-500 mt-1">
-                              Add stock only. The entered quantity will be added to the current stock.
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <input
-                              type="number"
-                              required
-                              min={5}
-                              value={formData.availableSets}
-                              onChange={e => setFormData({
-                                ...formData,
-                                availableSets: Number(e.target.value)
-                              })}
-                              className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono font-bold focus:outline-none focus:border-rose-900"
-                            />
-                            <p className="text-[10px] text-stone-400 mt-1">
-                              Minimum 5 sets required.
-                            </p>
-                          </>
-                        )}
-                      </>
-                    )}
                   </div>
                 </div>
                 <p className="text-[10px] text-stone-400 -mt-2">

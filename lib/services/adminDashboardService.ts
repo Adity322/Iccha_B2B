@@ -105,6 +105,16 @@ export class AdminDashboardService {
       // Recent KYC applications
       // ---------------------------------------------------------
       prisma.kYCApplication.findMany({
+        where: {
+          status: {
+            in: [
+              'APPLICATION_RECEIVED',
+              'UNDER_REVIEW',
+              'ADDITIONAL_INFORMATION_REQUIRED',
+            ],
+          },
+        },
+
         orderBy: {
           submittedAt: 'desc',
         },

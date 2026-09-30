@@ -22,6 +22,11 @@ interface Category {
   name: string;
 }
 
+interface Vendor {
+  id: string;
+  name: string;
+}
+
 interface RetailerProduct {
   id: string;
   sku: string;
@@ -35,6 +40,7 @@ interface RetailerProduct {
   piecesPerSet: number;
   wholesalePricePerSet: string | number;
   availableSets: number;
+  minOrderSets: number;
   sizeCombination: string;
   fabric: string;
   workType: string;
@@ -62,6 +68,8 @@ function RetailerCatalogueContent() {
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [selectedVendor, setSelectedVendor] = useState<string>(searchParams.get('vendor') || 'all');
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -88,10 +96,18 @@ function RetailerCatalogueContent() {
       .catch(() => {
         // Category filter list will just be empty.
       });
+    fetch('/api/retailer/vendors')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setVendors(json.data);
+      })
+      .catch(() => {
+        // Vendor filter list will just be empty.
+      });
     refreshCart();
   }, [refreshCart]);
 
-  const loadProducts = useCallback(async (categoryId: string, searchTerm: string, cursor?: string) => {
+  const loadProducts = useCallback(async (categoryId: string, searchTerm: string, vendorId: string, cursor?: string) => {
     const requestId = ++requestIdRef.current;
     isFetchingRef.current = true;
     if (cursor) setLoadingMore(true); else setLoading(true);
@@ -99,13 +115,13 @@ function RetailerCatalogueContent() {
     try {
       const params = new URLSearchParams();
       if (categoryId !== 'all') params.set('categoryId', categoryId);
+      if (vendorId !== 'all') params.set('vendorId', vendorId);
       if (searchTerm) params.set('search', searchTerm);
       if (cursor) params.set('cursor', cursor);
 
       const res = await fetch(`/api/retailer/products?${params.toString()}`);
       const json = await res.json();
 
-      // A newer request started (filter/search changed) - drop this response
       if (requestId !== requestIdRef.current) return;
 
       if (json.success) {
@@ -125,9 +141,9 @@ function RetailerCatalogueContent() {
 
   useEffect(() => {
     setNextCursor(null);
-    loadProducts(selectedCategory, appliedSearch);
+    loadProducts(selectedCategory, appliedSearch, selectedVendor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedVendor]);
 
   // Infinite scroll: load the next page when the sentinel enters the viewport
   useEffect(() => {
@@ -152,31 +168,51 @@ function RetailerCatalogueContent() {
     const term = search.trim();
     setAppliedSearch(term);
     setNextCursor(null);
-    loadProducts(selectedCategory, term);
+    loadProducts(selectedCategory, term, selectedVendor);
   };
 
   const clearSearch = () => {
     setSearch('');
     setAppliedSearch('');
     setNextCursor(null);
-    loadProducts(selectedCategory, '');
+    loadProducts(selectedCategory, '', selectedVendor);
   };
 
   const resetFilters = () => {
     setSearch('');
     setAppliedSearch('');
     setNextCursor(null);
-    if (selectedCategory !== 'all') {
-      setSelectedCategory('all'); // the effect above triggers the reload
-    } else {
-      loadProducts('all', '');
+    const categoryChanging = selectedCategory !== 'all';
+    const vendorChanging = selectedVendor !== 'all';
+    if (categoryChanging) setSelectedCategory('all');
+    if (vendorChanging) setSelectedVendor('all');
+    if (!categoryChanging && !vendorChanging) {
+      loadProducts('all', '', 'all'); // nothing changed to trigger the effect above, so reload directly
     }
   };
 
   const activeFiltersCount = [
     selectedCategory !== 'all',
+    selectedVendor !== 'all',
     search.trim().length > 0
   ].filter(Boolean).length;
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !nextCursor) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isFetchingRef.current) {
+          loadProducts(selectedCategory, appliedSearch, selectedVendor, nextCursor);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [nextCursor, selectedCategory, selectedVendor, appliedSearch, loading, loadingMore, loadProducts]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -247,58 +283,95 @@ function RetailerCatalogueContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
 
-            <aside className={`md:col-span-3 bg-white rounded-xl px-4 py-6 border border-stone-200 space-y-3 text-xs shadow-sm md:sticky md:top-52 ${
+            <div className={`md:col-span-3 space-y-4 md:sticky md:top-24 ${
               isMobileFilterOpen ? 'block' : 'hidden md:block'
             }`}>
-
-              <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-                <span className="font-serif text-sm font-bold text-stone-900 flex items-center gap-1.5">
-                  <SlidersHorizontal className="w-4 h-4 text-[#831843]" /> Filter Catalogue
-                </span>
-                {activeFiltersCount > 0 && (
-                  <button
-                    onClick={resetFilters}
-                    className="text-[11px] text-rose-900 font-semibold hover:underline flex items-center gap-1"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Reset
-                  </button>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-bold text-stone-500 uppercase tracking-wider text-[10px] block">
-                  Category ({categories.length})
-                </label>
-                <div className="max-h-96 overflow-y-auto space-y-0.5 -mx-1 pr-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategory('all')}
-                    className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
-                      selectedCategory === 'all'
-                        ? 'bg-stone-900 text-white font-semibold'
-                        : 'text-stone-600 hover:bg-stone-100'
-                    }`}
-                  >
-                    All Categories
-                  </button>
-                  {categories.map(c => (
+              {/* Vendor Filters */}
+              <aside className="bg-white rounded-xl px-4 py-5 border border-stone-200 shadow-sm">
+                <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+                  <span className="font-serif text-sm font-bold text-stone-900 flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-4 h-4 text-[#831843]" /> Filter Catalogue
+                  </span>
+                  {activeFiltersCount > 0 && (
                     <button
-                      key={c.id}
+                      onClick={resetFilters}
+                      className="text-[11px] text-rose-900 font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Reset
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 pt-3">
+                  <label className="font-bold text-stone-500 uppercase tracking-wider text-[10px] block">
+                    Vendor ({vendors.length})
+                  </label>
+                  <div className="max-h-64 overflow-y-auto space-y-0.5 -mx-1 pr-1">
+                    <button
                       type="button"
-                      onClick={() => setSelectedCategory(c.id)}
+                      onClick={() => setSelectedVendor('all')}
                       className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
-                        selectedCategory === c.id
-                          ? 'bg-[#831843] text-white font-semibold'
+                        selectedVendor === 'all'
+                          ? 'bg-stone-900 text-white font-semibold'
                           : 'text-stone-600 hover:bg-stone-100'
                       }`}
                     >
-                      <span className="block truncate">{c.name}</span>
+                      All Vendors
                     </button>
-                  ))}
+                    {vendors.map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setSelectedVendor(v.id)}
+                        className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
+                          selectedVendor === v.id
+                            ? 'bg-[#831843] text-white font-semibold'
+                            : 'text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        <span className="block truncate">{v.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </aside>
 
-            </aside>
+              {/* Category Filters */}
+              <aside className="bg-white rounded-xl px-4 py-5 border border-stone-200 shadow-sm">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-stone-500 uppercase tracking-wider text-[10px] block">
+                    Category ({categories.length})
+                  </label>
+                  <div className="max-h-96 overflow-y-auto space-y-0.5 -mx-1 pr-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('all')}
+                      className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
+                        selectedCategory === 'all'
+                          ? 'bg-stone-900 text-white font-semibold'
+                          : 'text-stone-600 hover:bg-stone-100'
+                      }`}
+                    >
+                      All Categories
+                    </button>
+                    {categories.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(c.id)}
+                        className={`w-full text-left px-2.5 py-1 rounded-md transition text-xs ${
+                          selectedCategory === c.id
+                            ? 'bg-[#831843] text-white font-semibold'
+                            : 'text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        <span className="block truncate">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </aside>
+            </div>
 
             <div className="md:col-span-9 space-y-3">
               <div className="flex items-center justify-between text-[11px] text-stone-500 gap-4">

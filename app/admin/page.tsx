@@ -548,97 +548,58 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* ------------------------------------------------ */}
-            {/* Low Stock */}
-            {/* ------------------------------------------------ */}
-
-            {dashboard.lowStockProducts.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-3">
-                <div className="flex items-center gap-2 text-amber-900 font-serif font-bold text-base">
-                  <AlertTriangle className="w-5 h-5 text-amber-700" />
-
-                  Low Stock Wholesale Lots Notice (
-                  {metrics?.lowStockProducts ?? 0} Designs ≤ 8 Sets
-                  )
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  {dashboard.lowStockProducts
-                    .slice(0, 3)
-                    .map((product) => (
-                      <div
-                        key={product.id}
-                        className="p-3 bg-white rounded-xl border border-amber-200 flex justify-between items-center gap-3"
-                      >
-                        <div className="min-w-0">
-                          <strong className="text-stone-900 block truncate">
-                            {product.name}
-                          </strong>
-
-                          <span className="text-[10px] text-stone-500 font-mono">
-                            SKU: {product.sku}
-                          </span>
-                        </div>
-
-                        <span className="font-bold text-amber-800 font-mono bg-amber-100 px-2 py-1 rounded whitespace-nowrap">
-                          {product.availableSets} Sets Left
-                        </span>
-                      </div>
-                    ))}
-                </div>
-
-                <div className="pt-2">
-                  <Link
-                    href="/admin/inventory"
-                    className="text-xs font-bold text-amber-900 underline"
-                  >
-                    Review inventory →
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* ------------------------------------------------ */}
             {/* Operational Summary */}
             {/* ------------------------------------------------ */}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              <div className="bg-white rounded-2xl border border-stone-200 p-5">
-                <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
-                  Approved Retailers
-                </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              {/* Approved Retailers */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
+                    Approved Retailers
+                  </p>
+                </div>
 
-                <p className="text-2xl font-bold font-mono text-stone-900 mt-2">
+                <p className="text-3xl font-bold font-mono text-stone-900 mt-3">
                   {metrics?.approvedRetailers ?? 0}
                 </p>
+
+                <p className="text-xs text-stone-500 mt-1">
+                  Retailers currently approved
+                </p>
               </div>
 
-              <div className="bg-white rounded-2xl border border-stone-200 p-5">
-                <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
-                  Active Vendors
-                </p>
+              {/* Active Vendors */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
+                    Active Vendors
+                  </p>
+                </div>
 
-                <p className="text-2xl font-bold font-mono text-stone-900 mt-2">
+                <p className="text-3xl font-bold font-mono text-stone-900 mt-3">
                   {metrics?.activeVendors ?? 0}
                 </p>
+
+                <p className="text-xs text-stone-500 mt-1">
+                  Vendors currently supplying
+                </p>
               </div>
 
-              <div className="bg-white rounded-2xl border border-stone-200 p-5">
-                <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
-                  Sets In Pipeline
-                </p>
+              {/* Sets in Pipeline */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm hover:shadow-md transition">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
+                    Sets in Pipeline
+                  </p>
+                </div>
 
-                <p className="text-2xl font-bold font-mono text-stone-900 mt-2">
+                <p className="text-3xl font-bold font-mono text-stone-900 mt-3">
                   {metrics?.totalSetsInPipeline ?? 0}
                 </p>
-              </div>
 
-              <div className="bg-white rounded-2xl border border-stone-200 p-5">
-                <p className="text-xs uppercase tracking-wider font-bold text-stone-400">
-                  Low Stock Designs
-                </p>
-
-                <p className="text-2xl font-bold font-mono text-amber-700 mt-2">
-                  {metrics?.lowStockProducts ?? 0}
+                <p className="text-xs text-stone-500 mt-1">
+                  Sets across active enquiries
                 </p>
               </div>
             </div>

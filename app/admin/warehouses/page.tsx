@@ -8,6 +8,7 @@ import {
   MapPin,
   X,
   Trash2,
+  Pencil
 } from 'lucide-react';
 import AdminSidebar from '@/components/layout/AdminSidebar';
 
@@ -40,6 +41,7 @@ export default function WarehousesPage() {
   const [role, setRole] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [deletingWarehouse, setDeletingWarehouse] = useState<Warehouse | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -105,6 +107,7 @@ export default function WarehousesPage() {
   // ============================================================
 
   const openAddModal = () => {
+    setEditingWarehouse(null);
     setFormData({
       name: '',
       address: '',
@@ -117,37 +120,58 @@ export default function WarehousesPage() {
     setIsModalOpen(true);
   };
 
+  const openEditModal = (warehouse: Warehouse) => {
+    setEditingWarehouse(warehouse);
+    setFormData({
+      name: warehouse.name,
+      address: warehouse.address ?? '',
+      city: warehouse.city ?? '',
+      state: warehouse.state ?? '',
+      pincode: warehouse.pincode ?? '',
+    });
+
+    setError('');
+    setIsModalOpen(true);
+  };
   // ============================================================
   // CREATE WAREHOUSE
   // ============================================================
 
-  const handleSaveWarehouse = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleSaveWarehouse = async ( e: React.FormEvent<HTMLFormElement> ) => {
     e.preventDefault();
 
     setSaving(true);
     setError('');
 
     try {
-      const res = await fetch('/api/vendor/warehouses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const res = await fetch(
+        editingWarehouse
+          ? `/api/vendor/warehouses/${editingWarehouse.id}`
+          : '/api/vendor/warehouses',
+        {
+          method: editingWarehouse ? 'PATCH' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
+        }
+      );
 
       const json = await res.json();
 
       if (!json.success) {
-        setError(json.error || 'Failed to create warehouse.');
+        setError(json.error || `Failed to ${editingWarehouse ? 'update' : 'create'} warehouse.`);
         return;
       }
 
-      setWarehouses(prev => [json.data, ...prev]);
+      if (editingWarehouse) {
+        setWarehouses(prev => prev.map(w => (w.id === json.data.id ? { ...w, ...json.data } : w)));
+      } else {
+        setWarehouses(prev => [json.data, ...prev]);
+      }
 
       setIsModalOpen(false);
+      setEditingWarehouse(null);
 
       setFormData({
         name: '',
@@ -157,7 +181,7 @@ export default function WarehousesPage() {
         pincode: '',
       });
     } catch {
-      setError('Could not create warehouse. Please try again.');
+      setError(`Could not ${editingWarehouse ? 'update' : 'create'} warehouse. Please try again.`);
     } finally {
       setSaving(false);
     }
@@ -335,17 +359,16 @@ export default function WarehousesPage() {
                   </div>
 
                   {warehouse.isMine && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeleteError('');
-                        setDeletingWarehouse(warehouse);
-                      }}
-                      title="Delete warehouse"
-                      className="text-stone-400 hover:text-red-600 transition shrink-0 p-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button type="button" onClick={() => openEditModal(warehouse)} title="Edit warehouse" className="text-stone-400 hover:text-rose-900 transition p-1">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+
+                      <button type="button" onClick={() => { setDeleteError(''); setDeletingWarehouse(warehouse); }}
+                        title="Delete warehouse" className="text-stone-400 hover:text-red-600 transition p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
 
                 </div>
@@ -416,13 +439,13 @@ export default function WarehousesPage() {
                     </span>
 
                     <h2 className="font-serif text-xl font-bold text-stone-900 mt-1">
-                      Add Warehouse
+                      {editingWarehouse ? 'Edit Warehouse' : 'Add Warehouse'}
                     </h2>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={() => { setIsModalOpen(false); setEditingWarehouse(null); }}
                     className="text-stone-400 hover:text-stone-800 transition"
                   >
                     <X className="w-5 h-5" />
@@ -565,13 +588,13 @@ export default function WarehousesPage() {
                       )}
 
                       <span>
-                        {saving ? 'Saving...' : 'Save Warehouse'}
+                        {saving ? 'Saving...' : editingWarehouse ? 'Save Changes' : 'Save Warehouse'}
                       </span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setIsModalOpen(false)}
+                      onClick={() => { setIsModalOpen(false); setEditingWarehouse(null); }}
                       className="px-5 py-3 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold"
                     >
                       Cancel
